@@ -1,0 +1,1343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cognify | ITSA Mental Ability Development Program</title>
+    <meta name="description" content="Cognify is the official platform for the ITSA Mental Ability Development Program. View rankings, test syllabi, notes, practice questions, and test archives.">
+    <meta name="theme-color" content="#0B0F19">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/static/css/main.css">
+</head>
+<body>
+    <!-- App Shell -->
+    <div id="app" class="app-container">
+
+        <!-- Top Header Navigation -->
+        <header class="navbar-top">
+            <div class="nav-content container">
+                <a href="#home" class="brand" id="brandLink">
+                    <div class="brand-icon">
+                        <i data-lucide="brain"></i>
+                    </div>
+                    <div class="brand-text">
+                        <span class="brand-name">Cognify</span>
+                        <span class="brand-sub">ITSA MAD Program</span>
+                    </div>
+                </a>
+
+                <!-- Desktop Nav Links -->
+                <nav class="desktop-nav">
+                    <a href="#home" class="nav-link active" data-view="home">
+                        <i data-lucide="home"></i> Home
+                    </a>
+                    <a href="#rankings" class="nav-link" data-view="rankings">
+                        <i data-lucide="trophy"></i> Rankings
+                    </a>
+                    <a href="#tests" class="nav-link" data-view="tests">
+                        <i data-lucide="file-text"></i> Tests
+                    </a>
+                    <a href="#plan" class="nav-link" data-view="plan">
+                        <i data-lucide="calendar"></i> Plan
+                    </a>
+                    <button type="button" class="nav-link admin-btn" id="openAdminModalBtn">
+                        <i data-lucide="shield-check"></i> Admin
+                    </button>
+                </nav>
+            </div>
+        </header>
+
+        <!-- Main Body Content Views -->
+        <main class="main-content">
+
+            <!-- 1. HOME VIEW -->
+            <section id="view-home" class="view-section active">
+                <!-- Hero Section -->
+                <div class="hero-card container">
+                    <div class="hero-badge">
+                        <span class="pulse-dot"></span> Official ITSA Platform
+                    </div>
+                    <h1 class="hero-title">Cognify</h1>
+                    <h2 class="hero-subtitle">ITSA Mental Ability Development Program</h2>
+                    <p class="hero-tagline">Sharpen Your Thinking.</p>
+                    <p class="hero-desc">
+                        The central portal for student test schedules, syllabus, practice questions, performance rankings, and official test keys across SY, TY, and Final Year.
+                    </p>
+                    <div class="hero-actions">
+                        <a href="#rankings" class="btn btn-primary" id="heroCtaBtn">
+                            <i data-lucide="trophy"></i> View Rankings
+                        </a>
+                        <a href="#plan" class="btn btn-secondary">
+                            <i data-lucide="book-open"></i> Semester Plan
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Rankings Section (Top 10) -->
+                <div class="section-block container" id="homeRankingsBlock">
+                    <div class="section-header">
+                        <div>
+                            <h2 class="section-title"><i data-lucide="award" class="accent-icon"></i> Current Class Leaderboards</h2>
+                            <p class="section-sub">Top 10 rankings per class based on Cognify Score</p>
+                        </div>
+                        <div class="timestamp-badge" id="rankingsLastUpdated">
+                            <i data-lucide="clock"></i> Last updated: Loading...
+                        </div>
+                    </div>
+
+                    <!-- Class Tabs Segmented Control -->
+                    <div class="class-segmented-control" role="tablist">
+                        <button class="segmented-btn active" data-tab="SY" role="tab">SY</button>
+                        <button class="segmented-btn" data-tab="TY" role="tab">TY</button>
+                        <button class="segmented-btn" data-tab="Final Year" role="tab">Final Year</button>
+                    </div>
+
+                    <!-- Leaderboard Container -->
+                    <div id="homeLeaderboardContainer" class="leaderboard-card">
+                        <!-- Rendered dynamically -->
+                    </div>
+                </div>
+
+                <!-- Test Timeline Section -->
+                <div class="section-block container">
+                    <div class="section-header">
+                        <h2 class="section-title"><i data-lucide="activity" class="accent-icon"></i> Test Timeline</h2>
+                        <p class="section-sub">Status of current, completed, and upcoming tests</p>
+                    </div>
+
+                    <div class="test-timeline-grid" id="testTimelineGrid">
+                        <!-- Rendered dynamically (Previous, Current, Next) -->
+                    </div>
+                </div>
+
+                <!-- Current Test Preparation & Syllabus -->
+                <div class="section-block container" id="currentPrepBlock">
+                    <div class="section-header">
+                        <h2 class="section-title"><i data-lucide="compass" class="accent-icon"></i> Current Test Preparation</h2>
+                        <p class="section-sub" id="currentTestSubTitle">Active syllabus & reference materials</p>
+                    </div>
+
+                    <div id="currentPrepContent" class="prep-container">
+                        <!-- Rendered dynamically -->
+                    </div>
+                </div>
+
+                <!-- Student Portal Published Results Lookup Section -->
+                <div class="section-block container" id="studentResultsLookupBlock">
+                    <div class="section-header">
+                        <h2 class="section-title"><i data-lucide="user-check" class="accent-icon"></i> My Student Scorecard & Results</h2>
+                        <p class="section-sub">Enter your registration number to view your published test scores, percentages, and Cognify Score</p>
+                    </div>
+
+                    <div class="card-box" style="background: rgba(14, 165, 233, 0.08); border: 1px solid rgba(14, 165, 233, 0.25);">
+                        <form id="studentResultsSearchForm" style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px;">
+                            <input type="text" id="studentResultsRegInput" placeholder="Enter Registration Number (e.g. REG101)" required style="flex: 1; min-width: 220px; padding: 10px 14px; font-family: monospace;">
+                            <button type="submit" class="btn btn-primary"><i data-lucide="search"></i> Check Published Results</button>
+                        </form>
+
+                        <div id="studentResultsContainer" class="hidden">
+                            <!-- Rendered dynamically -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Semester Plan Overview Preview -->
+                <div class="section-block container">
+                    <div class="section-header">
+                        <h2 class="section-title"><i data-lucide="layers" class="accent-icon"></i> Semester Roadmap</h2>
+                        <p class="section-sub">Chronological list of all tests and resources</p>
+                    </div>
+
+                    <div id="homeSemesterPlanContainer" class="semester-plan-list">
+                        <!-- Rendered dynamically -->
+                    </div>
+                </div>
+            </section>
+
+
+            <!-- 2. RANKINGS PAGE VIEW -->
+            <section id="view-rankings" class="view-section">
+                <div class="page-header container">
+                    <h1 class="page-title"><i data-lucide="trophy" class="accent-icon"></i> Class Rankings</h1>
+                    <p class="page-sub">Official ITSA Mental Ability Development Program standings</p>
+
+                    <div class="class-segmented-control margin-top" role="tablist">
+                        <button class="segmented-btn active" data-rankings-tab="SY">SY</button>
+                        <button class="segmented-btn" data-rankings-tab="TY">TY</button>
+                        <button class="segmented-btn" data-rankings-tab="Final Year">Final Year</button>
+                    </div>
+                </div>
+
+                <div class="container margin-top-sm">
+                    <div id="fullRankingsContainer" class="leaderboard-card">
+                        <!-- Rendered dynamically -->
+                    </div>
+                </div>
+            </section>
+
+
+            <!-- 3. TESTS ARCHIVE VIEW -->
+            <section id="view-tests" class="view-section">
+                <div class="page-header container">
+                    <h1 class="page-title"><i data-lucide="file-text" class="accent-icon"></i> Test Archive</h1>
+                    <p class="page-sub">Access question papers, answer keys, and syllabus per test</p>
+                </div>
+
+                <div class="container margin-top">
+                    <div id="testArchiveGrid" class="test-archive-grid">
+                        <!-- Rendered dynamically -->
+                    </div>
+                </div>
+            </section>
+
+
+            <!-- 4. PLAN PAGE VIEW -->
+            <section id="view-plan" class="view-section">
+                <div class="page-header container">
+                    <h1 class="page-title"><i data-lucide="calendar" class="accent-icon"></i> Semester Plan</h1>
+                    <p class="page-sub">Full chronological schedule of tests, notes, and keys</p>
+                </div>
+
+                <div class="container margin-top">
+                    <div id="fullSemesterPlanContainer" class="semester-plan-list">
+                        <!-- Rendered dynamically -->
+                    </div>
+                </div>
+            </section>
+
+
+            <!-- 5. ADMIN DASHBOARD VIEW (PROTECTED) -->
+            <section id="view-admin" class="view-section">
+                <div class="admin-dashboard-header container">
+                    <div>
+                        <span class="admin-badge"><i data-lucide="shield"></i> ITSA Organizer Portal</span>
+                        <h1 class="page-title">Admin Dashboard</h1>
+                    </div>
+                    <button type="button" class="btn btn-secondary btn-sm" id="adminLogoutBtn">
+                        <i data-lucide="log-out"></i> Logout
+                    </button>
+                </div>
+
+                <div class="admin-container container">
+                    <!-- Admin Navigation Tabs -->
+                    <div class="admin-tabs">
+                        <button class="admin-tab-btn active" data-admin-tab="dashboard"><i data-lucide="layout-dashboard"></i> Dashboard</button>
+                        <button class="admin-tab-btn" data-admin-tab="tests"><i data-lucide="settings"></i> Manage Tests</button>
+                        <button class="admin-tab-btn" data-admin-tab="students"><i data-lucide="users"></i> Student Lists</button>
+                        <button class="admin-tab-btn" data-admin-tab="results"><i data-lucide="upload-cloud"></i> Excel Results</button>
+                        <button class="admin-tab-btn" data-admin-tab="resources"><i data-lucide="folder-plus"></i> Upload Resources</button>
+                        <button class="admin-tab-btn" data-admin-tab="syllabus"><i data-lucide="book-open"></i> Syllabus</button>
+                        <button class="admin-tab-btn" data-admin-tab="backup"><i data-lucide="download"></i> Backup Data</button>
+                    </div>
+
+                    <!-- Tab 0: Admin Dashboard Overview -->
+                    <div class="admin-tab-pane active" id="admin-pane-dashboard">
+                        <div class="card-box" style="margin-bottom: 20px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
+                                <h3 style="font-size: 18px; margin: 0;"><i data-lucide="layout-dashboard" class="accent-icon"></i> Cognify High-Level Overview</h3>
+                                <span class="timestamp-badge" id="adminDashLastUpdated"><i data-lucide="clock"></i> Last Updated: --</span>
+                            </div>
+
+                            <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); margin-bottom: 20px;">
+                                <div class="stat-card" style="background: rgba(255,255,255,0.04); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
+                                    <div style="font-size: 12px; color: var(--text-muted);">Total Master Students</div>
+                                    <div id="dashStatTotalStudents" style="font-size: 26px; font-weight: 800; margin-top: 4px;">0</div>
+                                </div>
+                                <div class="stat-card" style="background: rgba(14, 165, 233, 0.1); padding: 16px; border-radius: var(--radius-md); border: 1px solid rgba(14, 165, 233, 0.3);">
+                                    <div style="font-size: 12px; color: var(--accent-sky);">SY Class Students</div>
+                                    <div id="dashStatSYCount" style="font-size: 26px; font-weight: 800; color: var(--accent-sky); margin-top: 4px;">0</div>
+                                </div>
+                                <div class="stat-card" style="background: rgba(168, 85, 247, 0.1); padding: 16px; border-radius: var(--radius-md); border: 1px solid rgba(168, 85, 247, 0.3);">
+                                    <div style="font-size: 12px; color: #C084FC;">TY Class Students</div>
+                                    <div id="dashStatTYCount" style="font-size: 26px; font-weight: 800; color: #C084FC; margin-top: 4px;">0</div>
+                                </div>
+                                <div class="stat-card" style="background: rgba(16, 185, 129, 0.1); padding: 16px; border-radius: var(--radius-md); border: 1px solid rgba(16, 185, 129, 0.3);">
+                                    <div style="font-size: 12px; color: var(--accent-emerald);">Final Year Students</div>
+                                    <div id="dashStatFYCount" style="font-size: 26px; font-weight: 800; color: var(--accent-emerald); margin-top: 4px;">0</div>
+                                </div>
+                            </div>
+
+                            <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));">
+                                <div class="stat-card" style="background: rgba(255,255,255,0.03); padding: 14px; border-radius: var(--radius-sm);">
+                                    <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Upcoming Tests</div>
+                                    <div id="dashStatUpcomingTests" style="font-size: 20px; font-weight: 700; margin-top: 2px;">0</div>
+                                </div>
+                                <div class="stat-card" style="background: rgba(56, 189, 248, 0.1); padding: 14px; border-radius: var(--radius-sm);">
+                                    <div style="font-size: 11px; color: var(--accent-sky); text-transform: uppercase;">Current Active Tests</div>
+                                    <div id="dashStatCurrentTests" style="font-size: 20px; font-weight: 700; color: var(--accent-sky); margin-top: 2px;">0</div>
+                                </div>
+                                <div class="stat-card" style="background: rgba(245, 158, 11, 0.1); padding: 14px; border-radius: var(--radius-sm);">
+                                    <div style="font-size: 11px; color: var(--accent-amber); text-transform: uppercase;">Completed Tests</div>
+                                    <div id="dashStatCompletedTests" style="font-size: 20px; font-weight: 700; color: var(--accent-amber); margin-top: 2px;">0</div>
+                                </div>
+                                <div class="stat-card" style="background: rgba(16, 185, 129, 0.1); padding: 14px; border-radius: var(--radius-sm);">
+                                    <div style="font-size: 11px; color: var(--accent-emerald); text-transform: uppercase;">Published Tests</div>
+                                    <div id="dashStatPublishedTests" style="font-size: 20px; font-weight: 700; color: var(--accent-emerald); margin-top: 2px;">0</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tab 1: Manage Tests -->
+                    <div class="admin-tab-pane" id="admin-pane-tests">
+                        <div class="card-box">
+                            <div class="card-box-header">
+                                <h3>Create New Test</h3>
+                            </div>
+                            <form id="createTestForm" class="form-grid">
+                                <div class="form-group">
+                                    <label>Test Number</label>
+                                    <input type="text" name="test_number" placeholder="e.g. Test 05" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Test Name</label>
+                                    <input type="text" name="test_name" placeholder="e.g. Spatial Reasoning" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Test Date (DD/MM/YY)</label>
+                                    <input type="text" name="test_date" placeholder="e.g. 25/08/26" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Start Time</label>
+                                    <input type="text" name="start_time" placeholder="e.g. 10:00 AM" value="10:00 AM" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Finish Time</label>
+                                    <input type="text" name="finish_time" placeholder="e.g. 11:00 AM" value="11:00 AM" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Total Marks</label>
+                                    <input type="number" step="0.5" name="total_marks" placeholder="e.g. 50" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Status</label>
+                                    <select name="status">
+                                        <option value="Upcoming">Upcoming</option>
+                                        <option value="Current">Current</option>
+                                        <option value="Completed">Completed</option>
+                                    </select>
+                                </div>
+                                <div class="form-group span-full">
+                                    <button type="submit" class="btn btn-primary"><i data-lucide="plus"></i> Add Test</button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <div class="card-box margin-top">
+                            <div class="card-box-header">
+                                <h3>Existing Tests</h3>
+                            </div>
+                            <div id="adminTestsList" class="admin-table-container">
+                                <!-- Rendered dynamically -->
+                            </div>
+                        </div>
+
+                        <!-- Individual Test Admin Workspace Dashboard Container -->
+                        <div id="adminTestWorkspace" class="card-box margin-top hidden">
+                            <!-- Workspace Header -->
+                            <div class="workspace-header" style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid var(--border-subtle); padding-bottom: 16px; margin-bottom: 20px;">
+                                <div>
+                                    <button type="button" class="btn btn-secondary btn-sm" id="closeWorkspaceBtn" style="margin-bottom: 12px;">
+                                        <i data-lucide="arrow-left"></i> Back to All Tests
+                                    </button>
+                                    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                                        <h2 id="wsTestTitle" style="font-size: 22px; font-weight: 800;">Test --</h2>
+                                        <span id="wsStatusBadge" class="timeline-tag tag-current">Current</span>
+                                        <span id="wsPublishedBadge" class="timeline-tag tag-upcoming">Not Published</span>
+                                    </div>
+                                    <div style="font-size: 13px; color: var(--text-muted); margin-top: 6px;" id="wsTestSubMeta">
+                                        Date: -- &bull; Total Marks: -- &bull; Duration: -- mins
+                                    </div>
+                                </div>
+                                <div style="display: flex; gap: 8px;">
+                                    <button type="button" class="btn btn-primary btn-sm" id="wsPublishBtnHeader">
+                                        <i data-lucide="upload-cloud"></i> Publish Results
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Workspace Segmented Navigation Tabs -->
+                            <div class="admin-workspace-tabs" role="tablist" style="display: flex; gap: 8px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 12px; margin-bottom: 20px; overflow-x: auto;">
+                                <button class="ws-tab-btn active" data-ws-tab="overview"><i data-lucide="layout-dashboard"></i> Overview</button>
+                                <button class="ws-tab-btn" data-ws-tab="students"><i data-lucide="users"></i> Students & Attendance</button>
+                                <button class="ws-tab-btn" data-ws-tab="attempts"><i data-lucide="user-check"></i> Attempts</button>
+                                <button class="ws-tab-btn" data-ws-tab="results"><i data-lucide="check-square"></i> Results Verification</button>
+                                <button class="ws-tab-btn" data-ws-tab="resources"><i data-lucide="folder"></i> Resources</button>
+                                <button class="ws-tab-btn" data-ws-tab="questions"><i data-lucide="help-circle"></i> Questions</button>
+                                <button class="ws-tab-btn" data-ws-tab="settings"><i data-lucide="sliders"></i> Settings</button>
+                                <button class="ws-tab-btn" data-ws-tab="audit"><i data-lucide="shield-check"></i> Audit Log</button>
+                            </div>
+
+                            <!-- Pane 1: Overview -->
+                            <div class="ws-tab-pane active" id="ws-pane-overview">
+                                <!-- Schedule Box -->
+                                <div class="card-box" style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.25); margin-bottom: 20px;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                                        <h4 style="font-size: 16px; color: var(--accent-sky); margin: 0;">
+                                            <i data-lucide="clock" style="width: 18px; height: 18px; display: inline; vertical-align: middle;"></i> Schedule & Availability
+                                        </h4>
+                                        <span id="wsScheduleStateBadge" class="timeline-tag tag-current">Currently Active</span>
+                                    </div>
+                                    <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; font-size: 13px;">
+                                        <div>
+                                            <div style="color: var(--text-muted); font-size: 11px; text-transform: uppercase;">Date</div>
+                                            <div id="wsScheduleDate" style="font-weight: 700;">--</div>
+                                        </div>
+                                        <div>
+                                            <div style="color: var(--text-muted); font-size: 11px; text-transform: uppercase;">Start Time</div>
+                                            <div id="wsScheduleStart" style="font-weight: 700;">--</div>
+                                        </div>
+                                        <div>
+                                            <div style="color: var(--text-muted); font-size: 11px; text-transform: uppercase;">Finish Time</div>
+                                            <div id="wsScheduleFinish" style="font-weight: 700;">--</div>
+                                        </div>
+                                        <div>
+                                            <div style="color: var(--text-muted); font-size: 11px; text-transform: uppercase;">Current Server Time</div>
+                                            <div id="wsScheduleServerTime" style="font-weight: 700; color: var(--accent-emerald);">--</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); margin-bottom: 20px;">
+                                    <div class="stat-card" style="background: rgba(255,255,255,0.04); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
+                                        <div style="font-size: 12px; color: var(--text-muted);">Registered Students</div>
+                                        <div id="wsStatRegistered" style="font-size: 24px; font-weight: 800; margin-top: 4px;">0</div>
+                                    </div>
+                                    <div class="stat-card" style="background: rgba(14, 165, 233, 0.1); padding: 16px; border-radius: var(--radius-md); border: 1px solid rgba(14, 165, 233, 0.3);">
+                                        <div style="font-size: 12px; color: var(--accent-sky);">Submissions</div>
+                                        <div id="wsStatSubmissions" style="font-size: 24px; font-weight: 800; color: var(--accent-sky); margin-top: 4px;">0</div>
+                                    </div>
+                                    <div class="stat-card" style="background: rgba(16, 185, 129, 0.1); padding: 16px; border-radius: var(--radius-md); border: 1px solid rgba(16, 185, 129, 0.3);">
+                                        <div style="font-size: 12px; color: var(--accent-emerald);">Present Students</div>
+                                        <div id="wsStatPresent" style="font-size: 24px; font-weight: 800; color: var(--accent-emerald); margin-top: 4px;">0</div>
+                                    </div>
+                                    <div class="stat-card" style="background: rgba(245, 158, 11, 0.1); padding: 16px; border-radius: var(--radius-md); border: 1px solid rgba(245, 158, 11, 0.3);">
+                                        <div style="font-size: 12px; color: var(--accent-amber);">Absent Students</div>
+                                        <div id="wsStatAbsent" style="font-size: 24px; font-weight: 800; color: var(--accent-amber); margin-top: 4px;">0</div>
+                                    </div>
+                                    <div class="stat-card" style="background: rgba(168, 85, 247, 0.1); padding: 16px; border-radius: var(--radius-md); border: 1px solid rgba(168, 85, 247, 0.3);">
+                                        <div style="font-size: 12px; color: #C084FC;">Late Attempts</div>
+                                        <div id="wsStatLate" style="font-size: 24px; font-weight: 800; color: #C084FC; margin-top: 4px;">0</div>
+                                    </div>
+                                    <div class="stat-card" style="background: rgba(239, 68, 68, 0.1); padding: 16px; border-radius: var(--radius-md); border: 1px solid rgba(239, 68, 68, 0.3);">
+                                        <div style="font-size: 12px; color: var(--accent-rose);">Terminated Attempts</div>
+                                        <div id="wsStatTerminated" style="font-size: 24px; font-weight: 800; color: var(--accent-rose); margin-top: 4px;">0</div>
+                                    </div>
+                                    <div class="stat-card" style="background: rgba(236, 72, 153, 0.1); padding: 16px; border-radius: var(--radius-md); border: 1px solid rgba(236, 72, 153, 0.3);">
+                                        <div style="font-size: 12px; color: #F472B6;">Violation Flags</div>
+                                        <div id="wsStatViolations" style="font-size: 24px; font-weight: 800; color: #F472B6; margin-top: 4px;">0</div>
+                                    </div>
+                                </div>
+
+                                <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); padding: 16px; border-radius: var(--radius-md);">
+                                    <div>
+                                        <div style="font-weight: 600; font-size: 14px;">Test Status Controls</div>
+                                        <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Manually change test status. Changing to Completed reveals Question Paper & Key.</div>
+                                    </div>
+                                    <select id="wsQuickStatusSelect" style="padding: 6px 12px; width: auto; font-weight: 600;">
+                                        <option value="Upcoming">Upcoming</option>
+                                        <option value="Current">Current</option>
+                                        <option value="Completed">Completed</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Pane 2: Students & Attendance -->
+                            <div class="ws-tab-pane" id="ws-pane-students">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+                                    <div>
+                                        <h4 style="font-size: 16px;">Student Class List & Attendance Verification</h4>
+                                        <p style="font-size: 12px; color: var(--text-muted);">Every student defaults to Absent until verified as Present by admin.</p>
+                                    </div>
+                                    <div style="display: flex; gap: 8px;">
+                                        <button type="button" class="btn btn-secondary btn-sm" id="wsMarkAllPresentBtn">
+                                            <i data-lucide="user-check"></i> Mark All Present
+                                        </button>
+                                    </div>
+                                </div>
+                                <div id="wsStudentsTableContainer" class="admin-table-container">
+                                    <!-- Table rendered dynamically -->
+                                </div>
+                            </div>
+
+                            <!-- Pane 3: Attempts -->
+                            <div class="ws-tab-pane" id="ws-pane-attempts">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                                    <h4 style="font-size: 16px;">Student Attempts Review</h4>
+                                    <select id="wsAttemptsFilter" style="width: auto; padding: 4px 10px; font-size: 13px;">
+                                        <option value="all">All Attempts</option>
+                                        <option value="submitted">Submitted Only</option>
+                                        <option value="flagged">⚠️ Violations / Terminated</option>
+                                    </select>
+                                </div>
+                                <div id="wsAttemptsTableContainer" class="admin-table-container">
+                                    <!-- Table rendered dynamically -->
+                                </div>
+                            </div>
+
+                            <!-- Pane 4: Results Verification -->
+                            <div class="ws-tab-pane" id="ws-pane-results">
+                                <div style="background: rgba(14, 165, 233, 0.1); border: 1px solid rgba(14, 165, 233, 0.3); border-radius: var(--radius-md); padding: 20px; margin-bottom: 20px;">
+                                    <h4 style="font-size: 18px; color: var(--accent-sky); margin-bottom: 6px;">Official Result Verification & Publication</h4>
+                                    <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
+                                        Review attendance and flagged attempts below before publishing. Publishing will officially update student scores and public rankings.
+                                    </p>
+                                    <button type="button" class="btn btn-primary btn-lg" id="wsPublishResultsBtnMain">
+                                        <i data-lucide="upload-cloud"></i> Publish Results for Ranking
+                                    </button>
+                                </div>
+                                <div id="wsResultsVerificationTableContainer" class="admin-table-container">
+                                    <!-- Table rendered dynamically -->
+                                </div>
+                            </div>
+
+                            <!-- Pane 5: Resources & Syllabus -->
+                            <div class="ws-tab-pane" id="ws-pane-resources">
+                                <div class="form-grid">
+                                    <!-- Manage Syllabus Box -->
+                                    <div class="card-box" style="background: rgba(0,0,0,0.2);">
+                                        <h4 style="font-size: 16px; margin-bottom: 12px;">Syllabus Categories</h4>
+                                        <div id="wsSyllabusCategoriesList" style="margin-bottom: 16px;"></div>
+                                        <form id="wsAddSyllabusForm" style="display: flex; flex-direction: column; gap: 10px;">
+                                            <input type="text" id="wsCatNameInput" placeholder="Category Name (e.g. Logic)" required>
+                                            <textarea id="wsCatTopicsInput" rows="2" placeholder="Topics (comma-separated)" required></textarea>
+                                            <button type="submit" class="btn btn-secondary btn-sm"><i data-lucide="plus"></i> Add Category</button>
+                                        </form>
+                                    </div>
+
+                                    <!-- Manage Files Box -->
+                                    <div class="card-box" style="background: rgba(0,0,0,0.2);">
+                                        <h4 style="font-size: 16px; margin-bottom: 12px;">Test Material & Papers</h4>
+                                        <div id="wsResourcesList" style="margin-bottom: 16px; display: flex; flex-direction: column; gap: 10px;"></div>
+                                        <form id="wsUploadResourceForm" enctype="multipart/form-data" style="display: flex; flex-direction: column; gap: 10px;">
+                                            <select id="wsResourceTypeSelect" required>
+                                                <option value="notes">Notes (PDF)</option>
+                                                <option value="practice">Practice Questions (PDF)</option>
+                                                <option value="question_paper">Question Paper (PDF)</option>
+                                                <option value="answer_key">Answer Key (PDF)</option>
+                                            </select>
+                                            <input type="text" id="wsResourceTitleInput" placeholder="Document Title" required>
+                                            <input type="file" id="wsResourceFileInput" accept=".pdf" required>
+                                            <button type="submit" class="btn btn-primary btn-sm"><i data-lucide="upload"></i> Upload Resource</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Pane 6: Questions -->
+                            <div class="ws-tab-pane" id="ws-pane-questions">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+                                    <h4 style="font-size: 16px; margin: 0;">Online Test Questions</h4>
+                                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                        <input type="file" id="wsQuestionExcelFileInput" accept=".xlsx" style="display: none;">
+                                        <button type="button" class="btn btn-primary btn-sm" id="wsUploadQuestionExcelBtn">
+                                            <i data-lucide="file-spreadsheet"></i> Upload Question Excel (.xlsx)
+                                        </button>
+                                        <button type="button" class="btn btn-secondary btn-sm" id="wsReplaceQuestionExcelBtn">
+                                            <i data-lucide="refresh-cw"></i> Replace All Questions
+                                        </button>
+                                        <button type="button" class="btn btn-secondary btn-sm" id="wsAddQuestionToggleBtn">
+                                            <i data-lucide="plus"></i> Add Single Question
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <form id="wsAddQuestionForm" class="card-box hidden" style="background: rgba(0,0,0,0.2); margin-bottom: 20px;">
+                                    <div class="form-grid">
+                                        <div class="form-group">
+                                            <label>Question Number</label>
+                                            <input type="number" id="wsQNumInput" placeholder="1" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Marks</label>
+                                            <input type="number" step="0.5" id="wsQMarksInput" value="1.0" required>
+                                        </div>
+                                        <div class="form-group span-full">
+                                            <label>Question Text</label>
+                                            <textarea id="wsQTextInput" rows="3" placeholder="Enter question prompt..." required></textarea>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Option A</label>
+                                            <input type="text" id="wsOptAInput" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Option B</label>
+                                            <input type="text" id="wsOptBInput" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Option C</label>
+                                            <input type="text" id="wsOptCInput" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Option D</label>
+                                            <input type="text" id="wsOptDInput" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Correct Option</label>
+                                            <select id="wsCorrectOptSelect">
+                                                <option value="A">Option A</option>
+                                                <option value="B">Option B</option>
+                                                <option value="C">Option C</option>
+                                                <option value="D">Option D</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group span-full">
+                                            <button type="submit" class="btn btn-primary btn-sm">Save Question</button>
+                                        </div>
+                                    </div>
+                                </form>
+
+                                <div id="wsQuestionsListContainer">
+                                    <!-- Questions list rendered dynamically -->
+                                </div>
+                            </div>
+
+                            <!-- Pane 7: Settings -->
+                            <div class="ws-tab-pane" id="ws-pane-settings">
+                                <div class="card-box" style="background: rgba(0,0,0,0.2); margin-bottom: 20px;">
+                                    <h4 style="font-size: 16px; margin-bottom: 12px;">Edit Test Configuration</h4>
+                                    <form id="wsEditTestForm" class="form-grid">
+                                        <div class="form-group">
+                                            <label>Test Number</label>
+                                            <input type="text" id="wsSettingNumber" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Test Name</label>
+                                            <input type="text" id="wsSettingName" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Test Date (DD/MM/YY)</label>
+                                            <input type="text" id="wsSettingDate" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Start Time</label>
+                                            <input type="text" id="wsSettingStartTime" placeholder="10:00 AM" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Finish Time</label>
+                                            <input type="text" id="wsSettingFinishTime" placeholder="11:00 AM" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Total Marks</label>
+                                            <input type="number" step="0.5" id="wsSettingMarks" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Duration (minutes)</label>
+                                            <input type="number" id="wsSettingDuration" value="60" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Status</label>
+                                            <select id="wsSettingStatus">
+                                                <option value="Upcoming">Upcoming</option>
+                                                <option value="Current">Current</option>
+                                                <option value="Completed">Completed</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group span-full">
+                                            <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Update Test Info</button>
+                                        </div>
+                                    </form>
+                                </div>
+
+                                <div class="card-box" style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3);">
+                                    <h4 style="color: var(--accent-rose); font-size: 16px; margin-bottom: 6px;">Delete Test</h4>
+                                    <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
+                                        Deleting a test permanently removes test information, student attempts, saved answers, attendance records, test results, resources, question paper, and answer key. Cognify Scores and rankings will be recalculated.
+                                    </p>
+                                    <button type="button" class="btn btn-danger" id="wsDeleteTestBtn">
+                                        <i data-lucide="trash-2"></i> Delete Entire Test
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Pane 8: Audit Log -->
+                            <div class="ws-tab-pane" id="ws-pane-audit">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                                    <div>
+                                        <h4 style="font-size: 16px; margin: 0;">System Audit Log</h4>
+                                        <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Lightweight log tracking administrative data updates, timing changes, and attendance overrides.</p>
+                                    </div>
+                                    <button type="button" class="btn btn-secondary btn-sm" id="refreshAuditLogBtn"><i data-lucide="refresh-cw"></i> Refresh Log</button>
+                                </div>
+                                <div id="wsAuditLogsTableContainer" class="admin-table-container">
+                                    <!-- Audit log table rendered dynamically -->
+                                </div>
+                            </div>
+                        </div>
+                    <!-- Tab 2: Master Student Lists -->
+                    <div class="admin-tab-pane" id="admin-pane-students">
+                        <div class="card-box">
+                            <div class="card-box-header">
+                                <h3>Master Student Lists</h3>
+                                <p class="card-box-sub">Upload initial master student spreadsheets (.xlsx) per class. Registration Number is used as the stable unique identifier.</p>
+                            </div>
+
+                            <div class="form-grid">
+                                <!-- SY Card -->
+                                <div style="background: rgba(0, 0, 0, 0.2); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 20px;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                        <h4 style="font-size: 16px; color: var(--accent-sky);">SY Class List</h4>
+                                        <span class="timestamp-badge" id="syStudentCountBadge">Loading...</span>
+                                    </div>
+                                    <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">Expected columns: Registration Number, Roll Number, Name</p>
+                                    <input type="file" id="syStudentFileInput" accept=".xlsx" class="file-input-visible" style="width: 100%; margin-bottom: 12px;">
+                                    <div id="syStudentPreview" class="hidden"></div>
+                                </div>
+
+                                <!-- TY Card -->
+                                <div style="background: rgba(0, 0, 0, 0.2); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 20px;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                        <h4 style="font-size: 16px; color: var(--accent-purple);">TY Class List</h4>
+                                        <span class="timestamp-badge" id="tyStudentCountBadge">Loading...</span>
+                                    </div>
+                                    <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">Expected columns: Registration Number, Roll Number, Name</p>
+                                    <input type="file" id="tyStudentFileInput" accept=".xlsx" class="file-input-visible" style="width: 100%; margin-bottom: 12px;">
+                                    <div id="tyStudentPreview" class="hidden"></div>
+                                </div>
+
+                                <!-- Final Year Card -->
+                                <div style="background: rgba(0, 0, 0, 0.2); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 20px;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                        <h4 style="font-size: 16px; color: var(--accent-emerald);">Final Year Class List</h4>
+                                        <span class="timestamp-badge" id="fyStudentCountBadge">Loading...</span>
+                                    </div>
+                                    <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">Expected columns: Registration Number, Roll Number, Name</p>
+                                    <input type="file" id="fyStudentFileInput" accept=".xlsx" class="file-input-visible" style="width: 100%; margin-bottom: 12px;">
+                                    <div id="fyStudentPreview" class="hidden"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="admin-tab-pane" id="admin-pane-results">
+                        <div class="card-box">
+                            <div class="card-box-header">
+                                <h3>Upload Test Results (.xlsx)</h3>
+                                <p class="card-box-sub">Select test and upload formatted Excel sheet with Registration Numbers, Attendance, and Scores.</p>
+                            </div>
+                            
+                            <div class="form-grid">
+                                <div class="form-group span-full">
+                                    <label>Select Target Test</label>
+                                    <select id="excelTestSelect" class="form-select">
+                                        <option value="">-- Choose Test --</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group span-full">
+                                    <div class="file-dropzone" id="excelDropzone">
+                                        <i data-lucide="file-spreadsheet" class="dropzone-icon"></i>
+                                        <p class="dropzone-title">Click or drag Excel file (.xlsx) here</p>
+                                        <p class="dropzone-sub">Supported columns: Registration Number, Attendance, Score</p>
+                                        <input type="file" id="excelFileInput" accept=".xlsx" class="file-input-visible">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Excel Validation Preview Modal Container -->
+                        <div id="excelPreviewContainer" class="card-box margin-top hidden">
+                            <!-- Dynamically loaded preview summary -->
+                        </div>
+                    </div>
+
+                    <!-- Tab 3: Upload Resources -->
+                    <div class="admin-tab-pane" id="admin-pane-resources">
+                        <div class="card-box">
+                            <div class="card-box-header">
+                                <h3>Upload Study Material / Question Papers</h3>
+                                <p class="card-box-sub">Notes & Practice available anytime. Question Papers & Answer Keys visible only when test is Completed.</p>
+                            </div>
+
+                            <form id="uploadResourceForm" class="form-grid" enctype="multipart/form-data">
+                                <div class="form-group">
+                                    <label>Select Test</label>
+                                    <select name="test_id" id="resourceTestSelect" required>
+                                        <!-- Rendered dynamically -->
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Resource Type</label>
+                                    <select name="resource_type" required>
+                                        <option value="notes">Notes (PDF)</option>
+                                        <option value="practice">Practice Questions (PDF)</option>
+                                        <option value="question_paper">Question Paper (Completed test)</option>
+                                        <option value="answer_key">Answer Key (Completed test)</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Document Title</label>
+                                    <input type="text" name="title" placeholder="e.g. Set A Practice Material" required>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Select PDF File</label>
+                                    <input type="file" name="file" accept=".pdf" required>
+                                </div>
+
+                                <div class="form-group span-full">
+                                    <button type="submit" class="btn btn-primary"><i data-lucide="upload"></i> Upload File</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Tab 4: Syllabus Management -->
+                    <div class="admin-tab-pane" id="admin-pane-syllabus">
+                        <div class="card-box">
+                            <div class="card-box-header">
+                                <h3>Add Syllabus Category & Topics</h3>
+                            </div>
+
+                            <form id="addSyllabusForm" class="form-grid">
+                                <div class="form-group">
+                                    <label>Select Test</label>
+                                    <select name="test_id" id="syllabusTestSelect" required>
+                                        <!-- Rendered dynamically -->
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Category Name</label>
+                                    <input type="text" name="category_name" placeholder="e.g. Quantitative Aptitude" required>
+                                </div>
+
+                                <div class="form-group span-full">
+                                    <label>Topics (comma-separated or one per line)</label>
+                                    <textarea name="topics" rows="3" placeholder="e.g. Number Systems, Percentages, Ratio & Proportion" required></textarea>
+                                </div>
+
+                                <div class="form-group span-full">
+                                    <button type="submit" class="btn btn-primary"><i data-lucide="plus-circle"></i> Save Category</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Tab 5: Backup -->
+                    <div class="admin-tab-pane" id="admin-pane-backup">
+                        <div class="card-box">
+                            <div class="card-box-header">
+                                <h3>Backup Application Data</h3>
+                                <p class="card-box-sub">Generate and download a complete archive containing database tables, student master data, test results, and uploaded resource PDFs.</p>
+                            </div>
+                            <div class="margin-top">
+                                <a href="/api/admin/backup" class="btn btn-primary btn-lg">
+                                    <i data-lucide="download-cloud"></i> Download Full System Backup (.zip)
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 6. STUDENT EXAM MODE VIEW -->
+            <section id="view-exam-mode" class="view-section">
+                <div class="exam-container">
+                    <!-- Step 1: Student Verification Screen -->
+                    <div id="examRegistrationCard" class="card-box container" style="max-width: 540px; margin: 40px auto;">
+                        <div class="card-box-header text-center">
+                            <div class="brand-icon" style="margin: 0 auto 16px auto; width: 56px; height: 56px; font-size: 28px;">
+                                <i data-lucide="brain"></i>
+                            </div>
+                            <h2 style="font-size: 24px;" id="examTestHeaderTitle">Online Exam Mode</h2>
+                            <p class="card-box-sub" id="examTestHeaderSub">Please enter your Registration Number to begin.</p>
+                        </div>
+
+                        <form id="studentVerifyForm" style="margin-top: 20px;">
+                            <div class="form-group">
+                                <label for="examRegInput">Registration Number</label>
+                                <input type="text" id="examRegInput" placeholder="e.g. 2024BIT001" required autocomplete="off" style="text-transform: uppercase; letter-spacing: 1px; font-weight: 600; font-size: 16px;">
+                            </div>
+                            <div id="examRegError" class="form-error hidden" style="margin-top: 12px;"></div>
+
+                            <!-- Identity Preview Box -->
+                            <div id="studentIdentityCard" class="hidden" style="background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: var(--radius-md); padding: 16px; margin-top: 16px;">
+                                <div style="font-size: 12px; color: var(--accent-sky); font-weight: 700; text-transform: uppercase;">Verified Student Profile</div>
+                                <h3 id="studentIdentityName" style="margin-top: 4px; font-size: 18px;">--</h3>
+                                <div style="display: flex; gap: 16px; font-size: 13px; color: var(--text-muted); margin-top: 6px;">
+                                    <span>Roll No: <strong id="studentIdentityRoll" style="color: var(--text-primary);">--</strong></span>
+                                    <span>Class: <strong id="studentIdentityClass" style="color: var(--text-primary);">--</strong></span>
+                                </div>
+                            </div>
+
+                            <div style="margin-top: 24px; display: flex; gap: 12px;">
+                                <button type="button" class="btn btn-secondary" id="cancelExamBtn" style="flex: 1;">Cancel</button>
+                                <button type="submit" class="btn btn-primary" id="verifyRegBtn" style="flex: 1;">Verify Registration</button>
+                                <button type="button" class="btn btn-primary hidden" id="startExamBtn" style="flex: 1;">Start Test <i data-lucide="play"></i></button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Step 2: Active Exam Test Interface -->
+                    <div id="activeExamInterface" class="hidden">
+                        <div class="exam-top-bar">
+                            <div class="exam-brand">
+                                <i data-lucide="brain"></i>
+                                <div>
+                                    <span id="examTestNumberTag">Test --</span>
+                                    <h3 id="examTestNameTitle" style="font-size: 16px; color: #fff;">--</h3>
+                                </div>
+                            </div>
+
+                            <div class="exam-timer-box">
+                                <i data-lucide="clock" style="color: var(--accent-amber);"></i>
+                                <span id="examCountdownTimer">00:00:00</span>
+                            </div>
+
+                            <button type="button" class="btn btn-primary btn-sm" id="submitExamBtn">
+                                <i data-lucide="check-circle"></i> Submit Test
+                            </button>
+                        </div>
+
+                        <div class="exam-body-grid container margin-top">
+                            <!-- Question Content -->
+                            <div class="exam-question-card card-box">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                                    <span class="timeline-tag tag-current" id="examQuestionBadge">Question 1 of --</span>
+                                    <span style="font-size: 13px; color: var(--text-muted);" id="examQuestionMarks">1 Mark</span>
+                                </div>
+
+                                <h3 id="examQuestionPrompt" style="font-size: 18px; line-height: 1.5; margin-bottom: 24px;">Loading question...</h3>
+
+                                <div class="exam-options-list" id="examOptionsList">
+                                    <!-- Option cards rendered dynamically -->
+                                </div>
+
+                                <div class="exam-nav-actions margin-top">
+                                    <button type="button" class="btn btn-secondary" id="examPrevBtn"><i data-lucide="chevron-left"></i> Previous</button>
+                                    <button type="button" class="btn btn-primary" id="examNextBtn">Next <i data-lucide="chevron-right"></i></button>
+                                </div>
+                            </div>
+
+                            <!-- Question Navigator Sidebar -->
+                            <div class="exam-sidebar card-box">
+                                <h4 style="font-size: 15px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                                    <i data-lucide="grid"></i> Question Navigator
+                                </h4>
+                                <div class="question-navigator-grid" id="questionNavGrid">
+                                    <!-- Rendered dynamically -->
+                                </div>
+
+                                <div style="margin-top: 20px; font-size: 12px; display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--border-subtle); padding-top: 12px;">
+                                    <div style="display: flex; align-items: center; gap: 8px;"><span class="nav-legend-dot answered"></span> Answered</div>
+                                    <div style="display: flex; align-items: center; gap: 8px;"><span class="nav-legend-dot unanswered"></span> Unanswered</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 3: Exam Submission / Termination Screen -->
+                    <div id="examCompletionCard" class="card-box container hidden" style="max-width: 500px; margin: 60px auto; text-align: center; padding: 40px 24px;">
+                        <div class="completion-icon-wrapper" id="completionIconBox" style="font-size: 48px; margin-bottom: 16px;">
+                            <i data-lucide="check-circle-2" style="color: var(--accent-emerald); width: 64px; height: 64px;"></i>
+                        </div>
+                        <h2 id="completionTitle" style="font-size: 24px; margin-bottom: 12px;">Test Submitted</h2>
+                        <p id="completionMessage" style="color: var(--text-secondary); line-height: 1.6; margin-bottom: 24px;">
+                            Your response has been recorded successfully.<br>Results will be published after verification.
+                        </p>
+                        <button type="button" class="btn btn-primary btn-lg" id="finishExamBtn">Return to Cognify</button>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+
+        <!-- Bottom Navigation Bar (Mobile-first design) -->
+        <nav class="navbar-bottom">
+            <a href="#home" class="bottom-nav-item active" data-view="home">
+                <i data-lucide="home"></i>
+                <span>Home</span>
+            </a>
+            <a href="#rankings" class="bottom-nav-item" data-view="rankings">
+                <i data-lucide="trophy"></i>
+                <span>Rankings</span>
+            </a>
+            <a href="#tests" class="bottom-nav-item" data-view="tests">
+                <i data-lucide="file-text"></i>
+                <span>Tests</span>
+            </a>
+            <a href="#plan" class="bottom-nav-item" data-view="plan">
+                <i data-lucide="calendar"></i>
+                <span>Plan</span>
+            </a>
+            <button type="button" class="bottom-nav-item admin-trigger" id="openAdminModalBtnMobile">
+                <i data-lucide="shield-check"></i>
+                <span>Admin</span>
+            </button>
+        </nav>
+
+        <!-- Footer -->
+        <footer class="site-footer">
+            <div class="container footer-content">
+                <div class="footer-brand">
+                    <span class="brand-name">Cognify</span>
+                    <span class="footer-copy">ITSA Mental Ability Development Program &copy; 2026</span>
+                </div>
+                <div class="footer-tag">Sharpen Your Thinking.</div>
+            </div>
+        </footer>
+
+    </div>
+
+    <!-- MODAL 1: Admin Password Access Modal -->
+    <div class="modal-overlay hidden" id="adminAuthModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div class="modal-icon"><i data-lucide="lock"></i></div>
+                <div>
+                    <h3 class="modal-title">Admin Access</h3>
+                    <p class="modal-subtitle">Enter administrator password</p>
+                </div>
+                <button type="button" class="modal-close" id="closeAdminAuthModalBtn">&times;</button>
+            </div>
+            
+            <form id="adminAuthForm" class="modal-body">
+                <div class="form-group">
+                    <label for="adminPasswordInput">Administrator Password</label>
+                    <div class="password-wrapper">
+                        <input type="password" id="adminPasswordInput" placeholder="Enter password" required autocomplete="current-password">
+                        <button type="button" class="toggle-password-btn" id="togglePasswordBtn" title="Show/Hide Password">
+                            <i data-lucide="eye"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="form-error hidden" id="adminAuthError">
+                    <i data-lucide="alert-circle"></i> Incorrect password. Please try again.
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelAdminAuthBtn">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="submitAdminAuthBtn">
+                        Continue <i data-lucide="arrow-right"></i>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL 2: Destructive Action Confirmation Modal -->
+    <div class="modal-overlay hidden" id="confirmModal">
+        <div class="modal-card">
+            <div class="modal-header danger">
+                <div class="modal-icon danger-icon"><i data-lucide="alert-triangle"></i></div>
+                <div>
+                    <h3 class="modal-title" id="confirmModalTitle">Confirm Action</h3>
+                </div>
+                <button type="button" class="modal-close" id="closeConfirmModalBtn">&times;</button>
+            </div>
+            
+            <div class="modal-body">
+                <p id="confirmModalMessage" class="confirm-msg"></p>
+                <div class="modal-actions margin-top">
+                    <button type="button" class="btn btn-secondary" id="confirmModalCancelBtn">Cancel</button>
+                    <button type="button" class="btn btn-danger" id="confirmModalSubmitBtn">Confirm</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 3: Fullscreen Violation Warning Modal -->
+    <div class="modal-overlay hidden" id="fullscreenWarningModal">
+        <div class="modal-card" style="max-width: 440px;">
+            <div class="modal-header danger">
+                <div class="modal-icon danger-icon"><i data-lucide="alert-octagon"></i></div>
+                <div>
+                    <h3 class="modal-title">Fullscreen Exited</h3>
+                </div>
+            </div>
+            <div class="modal-body text-center" style="padding-top: 16px;">
+                <p style="color: var(--text-secondary); line-height: 1.6;">
+                    You must remain in fullscreen mode while taking the test.<br>
+                    Leaving fullscreen repeatedly may terminate your test.
+                </p>
+                <div style="margin-top: 16px; font-weight: 700; color: var(--accent-rose);" id="warningViolationCountText">
+                    Violation Warning 1 of 3
+                </div>
+                <div class="modal-actions margin-top">
+                    <button type="button" class="btn btn-primary btn-block" id="returnToFullscreenBtn">
+                        Return to Test <i data-lucide="maximize"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 4: Admin Student Attempt Review Modal -->
+    <div class="modal-overlay hidden" id="attemptReviewModal">
+        <div class="modal-card" style="max-width: 760px;">
+            <div class="modal-header">
+                <div class="modal-icon"><i data-lucide="user-check"></i></div>
+                <div>
+                    <h3 class="modal-title" id="reviewModalTitle">Student Attempt Breakdown</h3>
+                    <p class="modal-subtitle" id="reviewModalSubtitle">--</p>
+                </div>
+                <button type="button" class="modal-close" id="closeAttemptReviewModalBtn">&times;</button>
+            </div>
+            <div class="modal-body" id="reviewModalBody" style="max-height: 70vh; overflow-y: auto;">
+                <!-- Dynamically loaded review content -->
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 5: Admin Publish Results Confirmation Modal -->
+    <div class="modal-overlay hidden" id="publishConfirmModal">
+        <div class="modal-card" style="max-width: 480px;">
+            <div class="modal-header">
+                <div class="modal-icon"><i data-lucide="upload-cloud"></i></div>
+                <div>
+                    <h3 class="modal-title" id="publishConfirmTitle">Publish Test Results?</h3>
+                </div>
+                <button type="button" class="modal-close" id="closePublishConfirmModalBtn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="publishSummaryStatsBox" style="background: rgba(255,255,255,0.05); padding: 16px; border-radius: var(--radius-sm); margin-bottom: 16px; font-size: 14px;">
+                    <!-- Stats summary -->
+                </div>
+                <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 20px;">
+                    Publishing will update Cognify Scores and public rankings. Once published, official standings will be updated across the portal.
+                </p>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelPublishBtn">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="confirmPublishWorkspaceBtn">
+                        Confirm & Publish Results
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 6: Excel Question Import & Preview Modal -->
+    <div class="modal-overlay hidden" id="excelQuestionImportModal">
+        <div class="modal-card" style="max-width: 900px;">
+            <div class="modal-header">
+                <div class="modal-icon"><i data-lucide="file-spreadsheet"></i></div>
+                <div>
+                    <h3 class="modal-title">Question Excel Import Preview</h3>
+                    <p class="modal-subtitle">Review detected questions, options, and correct answers before importing.</p>
+                </div>
+                <button type="button" class="modal-close" id="closeExcelQuestionImportModalBtn">&times;</button>
+            </div>
+            <div class="modal-body" style="max-height: 75vh; overflow-y: auto;">
+                <!-- Summary Bar -->
+                <div id="excelImportSummaryBar" style="display: flex; gap: 16px; background: rgba(0,0,0,0.25); padding: 14px 18px; border-radius: var(--radius-md); margin-bottom: 16px; font-size: 14px; font-weight: 600;">
+                    <div><span style="color: var(--text-muted); font-size: 12px; display: block;">Total Detected</span> <span id="excelImportTotalDetected" style="font-size: 20px;">0</span></div>
+                    <div><span style="color: var(--text-muted); font-size: 12px; display: block;">Valid Questions</span> <span id="excelImportValidCount" style="color: var(--accent-emerald); font-size: 20px;">0</span></div>
+                    <div><span style="color: var(--text-muted); font-size: 12px; display: block;">Invalid / Errors</span> <span id="excelImportInvalidCount" style="color: var(--accent-rose); font-size: 20px;">0</span></div>
+                </div>
+
+                <!-- Warnings Container -->
+                <div id="excelImportWarningsContainer" class="hidden" style="margin-bottom: 16px;"></div>
+
+                <!-- Validation Errors Container -->
+                <div id="excelImportErrorsContainer" class="hidden" style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: var(--radius-md); padding: 14px; margin-bottom: 16px;">
+                    <div style="font-weight: 700; color: #FCA5A5; font-size: 14px; margin-bottom: 8px;">
+                        <i data-lucide="alert-octagon" style="width: 16px; height: 16px; display: inline;"></i> Validation Errors Found
+                    </div>
+                    <ul id="excelImportErrorsList" style="padding-left: 20px; color: #FCA5A5; font-size: 13px; max-height: 160px; overflow-y: auto;"></ul>
+                </div>
+
+                <!-- Preview Table Container -->
+                <div id="excelImportPreviewTableContainer">
+                    <table class="ranking-table" style="font-size: 13px;">
+                        <thead>
+                            <tr>
+                                <th style="width: 50px;">#</th>
+                                <th>Question Prompt</th>
+                                <th>Option A</th>
+                                <th>Option B</th>
+                                <th>Option C</th>
+                                <th>Option D</th>
+                                <th style="width: 70px; text-align: center;">Key</th>
+                                <th style="width: 60px; text-align: right;">Marks</th>
+                            </tr>
+                        </thead>
+                        <tbody id="excelImportPreviewTbody"></tbody>
+                    </table>
+                </div>
+
+                <div class="modal-actions margin-top">
+                    <button type="button" class="btn btn-secondary" id="cancelExcelImportBtn">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="confirmExcelImportBtn">
+                        <i data-lucide="check-circle"></i> Import Questions
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 7: Single Question Edit Modal -->
+    <div class="modal-overlay hidden" id="editQuestionModal">
+        <div class="modal-card" style="max-width: 600px;">
+            <div class="modal-header">
+                <div class="modal-icon"><i data-lucide="edit-3"></i></div>
+                <div>
+                    <h3 class="modal-title">Edit Question</h3>
+                    <p class="modal-subtitle">Update question statement, options, or correct answer.</p>
+                </div>
+                <button type="button" class="modal-close" id="closeEditQuestionModalBtn">&times;</button>
+            </div>
+            <form id="editQuestionForm" class="modal-body">
+                <input type="hidden" id="editQuestionId">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Question Number</label>
+                        <input type="number" id="editQNumInput" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Marks</label>
+                        <input type="number" step="0.5" id="editQMarksInput" required>
+                    </div>
+                    <div class="form-group span-full">
+                        <label>Question Prompt</label>
+                        <textarea id="editQTextInput" rows="3" required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Option A</label>
+                        <input type="text" id="editOptAInput" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Option B</label>
+                        <input type="text" id="editOptBInput" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Option C</label>
+                        <input type="text" id="editOptCInput" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Option D</label>
+                        <input type="text" id="editOptDInput" required>
+                    </div>
+                    <div class="form-group span-full">
+                        <label>Correct Option (Admin Only)</label>
+                        <select id="editCorrectOptSelect" style="font-weight: 700;">
+                            <option value="A">Option A</option>
+                            <option value="B">Option B</option>
+                            <option value="C">Option C</option>
+                            <option value="D">Option D</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-actions margin-top">
+                    <button type="button" class="btn btn-secondary" id="cancelEditQuestionBtn">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i data-lucide="save"></i> Update Question
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL 8: Student List Import Modal -->
+    <div class="modal-overlay hidden" id="studentListImportModal">
+        <div class="modal-card" style="max-width: 760px;">
+            <div class="modal-header">
+                <div class="modal-icon"><i data-lucide="users"></i></div>
+                <div>
+                    <h3 class="modal-title" id="studentListModalTitle">Master Student List Import Preview</h3>
+                    <p class="modal-subtitle" id="studentListModalSubtitle">Review detected student records before importing.</p>
+                </div>
+                <button type="button" class="modal-close" id="closeStudentListModalBtn">&times;</button>
+            </div>
+            <div class="modal-body" style="max-height: 75vh; overflow-y: auto;">
+                <div id="studentListSummaryBar" style="display: flex; gap: 16px; background: rgba(0,0,0,0.25); padding: 12px 16px; border-radius: var(--radius-md); margin-bottom: 16px; font-size: 13px; font-weight: 600;">
+                    <div><span style="color: var(--text-muted); font-size: 11px; display: block;">Class</span> <span id="studentListModalClass" style="font-size: 18px; color: var(--accent-sky);">--</span></div>
+                    <div><span style="color: var(--text-muted); font-size: 11px; display: block;">Total Detected</span> <span id="studentListModalTotal" style="font-size: 18px;">0</span></div>
+                    <div><span style="color: var(--text-muted); font-size: 11px; display: block;">Valid Students</span> <span id="studentListModalValid" style="color: var(--accent-emerald); font-size: 18px;">0</span></div>
+                    <div><span style="color: var(--text-muted); font-size: 11px; display: block;">Existing Replaced</span> <span id="studentListModalExisting" style="color: var(--accent-amber); font-size: 18px;">0</span></div>
+                </div>
+
+                <div id="studentListErrorsContainer" class="hidden" style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: var(--radius-md); padding: 14px; margin-bottom: 16px;">
+                    <div style="font-weight: 700; color: #FCA5A5; font-size: 14px; margin-bottom: 8px;">
+                        <i data-lucide="alert-octagon" style="width: 16px; height: 16px; display: inline;"></i> Validation Errors Found
+                    </div>
+                    <ul id="studentListErrorsList" style="padding-left: 20px; color: #FCA5A5; font-size: 13px; max-height: 140px; overflow-y: auto;"></ul>
+                </div>
+
+                <div id="studentListPreviewTableContainer">
+                    <table class="ranking-table" style="font-size: 13px;">
+                        <thead>
+                            <tr>
+                                <th style="width: 80px;">Roll No</th>
+                                <th>Student Name</th>
+                                <th>Registration Number</th>
+                                <th style="width: 80px;">Class</th>
+                            </tr>
+                        </thead>
+                        <tbody id="studentListPreviewTbody"></tbody>
+                    </table>
+                </div>
+
+                <div class="modal-actions margin-top">
+                    <button type="button" class="btn btn-secondary" id="cancelStudentListImportBtn">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="confirmStudentListImportBtn">
+                        <i data-lucide="check-circle"></i> Import Student List
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 9: Student Exam Review Submission Modal -->
+    <div class="modal-overlay hidden" id="reviewSubmissionModal">
+        <div class="modal-card" style="max-width: 760px;">
+            <div class="modal-header">
+                <div class="modal-icon"><i data-lucide="check-circle-2"></i></div>
+                <div>
+                    <h3 class="modal-title">Review Submission</h3>
+                    <p class="modal-subtitle">Review your selected answers before final submission.</p>
+                </div>
+            </div>
+            <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                <div style="display: flex; gap: 16px; background: rgba(0,0,0,0.25); padding: 12px 16px; border-radius: var(--radius-md); margin-bottom: 16px; font-size: 13px; font-weight: 600;">
+                    <div><span style="color: var(--text-muted); font-size: 11px; display: block;">Total Questions</span> <span id="reviewTotalQCount" style="font-size: 18px;">0</span></div>
+                    <div><span style="color: var(--text-muted); font-size: 11px; display: block;">Answered</span> <span id="reviewAnsweredCount" style="color: var(--accent-emerald); font-size: 18px;">0</span></div>
+                    <div><span style="color: var(--text-muted); font-size: 11px; display: block;">Unanswered</span> <span id="reviewUnansweredCount" style="color: var(--accent-amber); font-size: 18px;">0</span></div>
+                </div>
+
+                <div style="margin-bottom: 16px;">
+                    <table class="ranking-table" style="font-size: 13px;">
+                        <thead>
+                            <tr>
+                                <th style="width: 50px;">Q#</th>
+                                <th>Question Prompt</th>
+                                <th style="width: 140px; text-align: right;">Status / Selection</th>
+                            </tr>
+                        </thead>
+                        <tbody id="reviewSubmissionTbody"></tbody>
+                    </table>
+                </div>
+
+                <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">
+                    Note: Clicking "Submit Test" will finalize your attempt. You cannot modify your answers after submitting.
+                </p>
+
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="reviewBackToTestBtn">
+                        <i data-lucide="arrow-left"></i> Back to Test
+                    </button>
+                    <button type="button" class="btn btn-primary" id="reviewSubmitTestBtn">
+                        <i data-lucide="send"></i> Submit Test
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Files -->
+    <script src="/static/js/app.js"></script>
+    <script src="/static/js/admin.js"></script>
+</body>
+</html>

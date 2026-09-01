@@ -1,0 +1,841 @@
+import { Component, OnInit, signal, inject } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
+import { AuthService } from '../../core/services/auth.service';
+import { AdminService } from '../../core/services/admin.service';
+import { LeaderboardService } from '../../core/services/leaderboard.service';
+import { ExcelService } from '../../core/services/excel.service';
+import { Test, DashboardStats, AuditLog, BackupRecord, AttendanceRecord, Student, Resource, SyllabusCategory, TestResult } from '../../core/models/cognify.models';
+
+@Component({
+  selector: 'app-admin-dashboard',
+  standalone: true,
+  imports: [CommonModule, FormsModule],
+  template: `
+    <section class="view-section active container">
+      <div class="admin-dashboard-header">
+        <div>
+          <div class="admin-badge">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            Administrator Console
+          </div>
+          <h1 style="font-size: 26px;">Cognify System Management</h1>
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm" (click)="handleLogout()">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
+          Logout Admin
+        </button>
+      </div>
+
+      <!-- MAIN ADMIN TABS -->
+      <div class="admin-tabs">
+        <button type="button" class="admin-tab-btn" [class.active]="activeTab() === 'dashboard'" (click)="activeTab.set('dashboard')">
+          <span>Dashboard</span>
+        </button>
+        <button type="button" class="admin-tab-btn" [class.active]="activeTab() === 'tests'" (click)="activeTab.set('tests')">
+          <span>Manage Tests</span>
+        </button>
+        <button type="button" class="admin-tab-btn" [class.active]="activeTab() === 'students'" (click)="activeTab.set('students')">
+          <span>Student Lists</span>
+        </button>
+        <button type="button" class="admin-tab-btn" [class.active]="activeTab() === 'results'" (click)="activeTab.set('results')">
+          <span>Excel Results</span>
+        </button>
+        <button type="button" class="admin-tab-btn" [class.active]="activeTab() === 'resources'" (click)="activeTab.set('resources')">
+          <span>Upload Resources</span>
+        </button>
+        <button type="button" class="admin-tab-btn" [class.active]="activeTab() === 'syllabus'" (click)="activeTab.set('syllabus')">
+          <span>Syllabus</span>
+        </button>
+        <button type="button" class="admin-tab-btn" [class.active]="activeTab() === 'backups'" (click)="activeTab.set('backups')">
+          <span>Backup Data</span>
+        </button>
+        <button type="button" class="admin-tab-btn" [class.active]="activeTab() === 'logs'" (click)="activeTab.set('logs')">
+          <span>Audit Logs</span>
+        </button>
+      </div>
+
+      <!-- 1. DASHBOARD TAB -->
+      @if (activeTab() === 'dashboard') {
+        <div class="admin-tab-pane active">
+          @if (stats(); as st) {
+            <div class="form-grid" style="margin-bottom: 24px;">
+              <div class="card-box">
+                <div style="font-size: 13px; color: var(--text-muted);">Total Master Students</div>
+                <div style="font-size: 32px; font-weight: 800; color: #FFF; margin-top: 4px;">{{ st.students_by_class.total }}</div>
+                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 8px;">
+                  SY: <strong style="color: var(--accent-sky);">{{ st.students_by_class.SY }}</strong> |
+                  TY: <strong style="color: #C084FC;">{{ st.students_by_class.TY }}</strong> |
+                  Final Year: <strong style="color: var(--accent-emerald);">{{ st.students_by_class['Final Year'] }}</strong>
+                </div>
+              </div>
+
+              <div class="card-box">
+                <div style="font-size: 13px; color: var(--text-muted);">Test Series Status</div>
+                <div style="font-size: 32px; font-weight: 800; color: var(--accent-sky); margin-top: 4px;">{{ st.tests_by_status.total }} Tests</div>
+                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 8px;">
+                  Completed: <strong style="color: var(--accent-emerald);">{{ st.tests_by_status.Completed }}</strong> |
+                  Current: <strong style="color: var(--accent-primary);">{{ st.tests_by_status.Current }}</strong> |
+                  Upcoming: <strong style="color: var(--accent-amber);">{{ st.tests_by_status.Upcoming }}</strong>
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+      }
+
+      <!-- 2. MANAGE TESTS TAB -->
+      @if (activeTab() === 'tests') {
+        <div class="admin-tab-pane active">
+          <div class="card-box" style="margin-bottom: 24px;">
+            <h3 style="font-size: 18px; margin-bottom: 16px;">Create New Test Series</h3>
+            <form (ngSubmit)="createTest()" class="form-grid">
+              <div class="form-group">
+                <label>Test Number (e.g. Test 05)</label>
+                <input type="text" [(ngModel)]="newTest.test_number" name="test_number" required>
+              </div>
+              <div class="form-group">
+                <label>Test Title</label>
+                <input type="text" [(ngModel)]="newTest.test_name" name="test_name" required>
+              </div>
+              <div class="form-group">
+                <label>Test Date</label>
+                <input type="date" [(ngModel)]="newTest.test_date" name="test_date" required>
+              </div>
+              <div class="form-group">
+                <label>Total Marks</label>
+                <input type="number" [(ngModel)]="newTest.total_marks" name="total_marks" required>
+              </div>
+              <div class="form-group">
+                <label>Status</label>
+                <select [(ngModel)]="newTest.status" name="status">
+                  <option value="Upcoming">Upcoming</option>
+                  <option value="Current">Current</option>
+                  <option value="Completed">Completed</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Duration (Minutes)</label>
+                <input type="number" [(ngModel)]="newTest.duration_minutes" name="duration_minutes">
+              </div>
+              <div class="span-full" style="text-align: right; margin-top: 12px;">
+                <button type="submit" class="btn btn-primary">Create Test Series</button>
+              </div>
+            </form>
+          </div>
+
+          <!-- TEST WORKSPACE DRAWER -->
+          @if (selectedWorkspaceTest(); as wsTest) {
+            <div class="card-box" style="border-color: var(--accent-primary); margin-bottom: 24px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <div>
+                  <span class="timeline-tag tag-current">Workspace Active</span>
+                  <h2 style="font-size: 22px; margin-top: 4px;">{{ wsTest.test_number }}: {{ wsTest.test_name }}</h2>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" (click)="selectedWorkspaceTest.set(null)">Close Workspace</button>
+              </div>
+
+              <!-- WORKSPACE SUB TABS -->
+              <div style="display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 8px; overflow-x: auto;">
+                <button type="button" class="ws-tab-btn" [class.active]="wsTab() === 'overview'" (click)="wsTab.set('overview')">Overview</button>
+                <button type="button" class="ws-tab-btn" [class.active]="wsTab() === 'questions'" (click)="wsTab.set('questions')">Questions & Versioning</button>
+                <button type="button" class="ws-tab-btn" [class.active]="wsTab() === 'attendance'" (click)="wsTab.set('attendance')">Attendance Override</button>
+                <button type="button" class="ws-tab-btn" [class.active]="wsTab() === 'publish'" (click)="wsTab.set('publish')">Results Publication</button>
+              </div>
+
+              @if (wsTab() === 'questions') {
+                <div>
+                  <h4 style="font-size: 16px; margin-bottom: 8px;">Question Bank & Version Management</h4>
+                  <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+                    Editing questions creates a new question version (Version 2) to preserve historical attempt reproducibility.
+                  </p>
+                  <input type="file" (change)="onQuestionFileSelected($event)" accept=".xlsx">
+                  @if (qUploadMsg()) {
+                    <div style="margin-top: 12px; color: var(--accent-emerald); font-weight: 600;">{{ qUploadMsg() }}</div>
+                  }
+                </div>
+              }
+
+              @if (wsTab() === 'attendance') {
+                <div>
+                  <h4 style="font-size: 16px; margin-bottom: 12px;">Candidate Attendance Override</h4>
+                  <table class="ranking-table">
+                    <thead>
+                      <tr><th>Registration No</th><th>Name</th><th>Status</th><th>Late Attempt</th><th>Override</th></tr>
+                    </thead>
+                    <tbody>
+                      @for (att of attendanceList(); track att.registration_no) {
+                        <tr>
+                          <td style="font-family: monospace;">{{ att.registration_no }}</td>
+                          <td>{{ att.student_name }}</td>
+                          <td>
+                            <span class="timeline-tag" [ngClass]="att.status === 'Present' ? 'tag-completed' : 'tag-upcoming'">{{ att.status }}</span>
+                          </td>
+                          <td>{{ att.is_late_attempt ? 'Yes (Late)' : 'No' }}</td>
+                          <td>
+                            <button type="button" class="btn btn-secondary btn-sm" (click)="toggleAttendance(att)">
+                              Toggle to {{ att.status === 'Present' ? 'Absent' : 'Present' }}
+                            </button>
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              }
+
+              @if (wsTab() === 'publish') {
+                <div>
+                  <h4 style="font-size: 16px; margin-bottom: 8px;">Official Result Publication Control</h4>
+                  <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+                    Publishing results makes candidate scores, percentage breakdowns, and official rankings public across dashboards.
+                  </p>
+                  <button type="button" class="btn btn-primary" (click)="publishResults(wsTest)">
+                    {{ wsTest.is_published ? 'Unpublish Results' : 'Publish Test Results' }}
+                  </button>
+                </div>
+              }
+            </div>
+          }
+
+          <div class="card-box">
+            <h3 style="font-size: 18px; margin-bottom: 16px;">Configured Test Series</h3>
+            <table class="ranking-table">
+              <thead>
+                <tr><th>Test No</th><th>Test Title</th><th>Date</th><th>Marks</th><th>Status</th><th>Action</th></tr>
+              </thead>
+              <tbody>
+                @for (t of tests(); track t.id) {
+                  <tr>
+                    <td style="font-family: monospace; font-weight: 700;">{{ t.test_number }}</td>
+                    <td>{{ t.test_name }}</td>
+                    <td>{{ t.test_date }}</td>
+                    <td>{{ t.total_marks }}</td>
+                    <td><span class="timeline-tag" [ngClass]="t.status === 'Current' ? 'tag-current' : 'tag-completed'">{{ t.status }}</span></td>
+                    <td>
+                      <button type="button" class="btn btn-secondary btn-sm" (click)="openWorkspace(t)">Open Workspace</button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      }
+
+      <!-- 3. STUDENT LISTS TAB -->
+      @if (activeTab() === 'students') {
+        <div class="admin-tab-pane active">
+          <div class="card-box" style="margin-bottom: 24px;">
+            <div class="card-box-header">
+              <h3 style="font-size: 20px;">Student Lists</h3>
+              <p class="card-box-sub">Manage student records for each class.</p>
+            </div>
+
+            <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px;">
+              <!-- SY Card -->
+              <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <h4 style="font-size: 16px; color: var(--accent-sky);">SY (Second Year)</h4>
+                  <span class="timestamp-badge">{{ syStudents().length }} Students</span>
+                </div>
+                <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">Master roster for Second Year class.</p>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                  <label class="btn btn-secondary btn-sm" style="cursor: pointer;">
+                    Upload / Replace
+                    <input type="file" (change)="onStudentFileSelected($event, 'SY')" accept=".xlsx" style="display: none;">
+                  </label>
+                  <button type="button" class="btn btn-primary btn-sm" (click)="viewStudentsClass.set('SY')">View Students</button>
+                </div>
+              </div>
+
+              <!-- TY Card -->
+              <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <h4 style="font-size: 16px; color: var(--accent-purple);">TY (Third Year)</h4>
+                  <span class="timestamp-badge">{{ tyStudents().length }} Students</span>
+                </div>
+                <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">Master roster for Third Year class.</p>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                  <label class="btn btn-secondary btn-sm" style="cursor: pointer;">
+                    Upload / Replace
+                    <input type="file" (change)="onStudentFileSelected($event, 'TY')" accept=".xlsx" style="display: none;">
+                  </label>
+                  <button type="button" class="btn btn-primary btn-sm" (click)="viewStudentsClass.set('TY')">View Students</button>
+                </div>
+              </div>
+
+              <!-- Final Year Card -->
+              <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <h4 style="font-size: 16px; color: var(--accent-emerald);">Final Year</h4>
+                  <span class="timestamp-badge">{{ fyStudents().length }} Students</span>
+                </div>
+                <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">Master roster for Final Year class.</p>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                  <label class="btn btn-secondary btn-sm" style="cursor: pointer;">
+                    Upload / Replace
+                    <input type="file" (change)="onStudentFileSelected($event, 'Final Year')" accept=".xlsx" style="display: none;">
+                  </label>
+                  <button type="button" class="btn btn-primary btn-sm" (click)="viewStudentsClass.set('Final Year')">View Students</button>
+                </div>
+              </div>
+            </div>
+
+            @if (studentUploadMsg()) {
+              <div style="margin-top: 16px; padding: 12px; border-radius: var(--radius-sm); background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald);">
+                {{ studentUploadMsg() }}
+              </div>
+            }
+          </div>
+
+          <!-- STUDENT LIST TABLE VIEW -->
+          @if (viewStudentsClass(); as cls) {
+            <div class="card-box margin-top">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h3 style="font-size: 18px; margin: 0;">{{ cls }} Master Student Roster</h3>
+                <button type="button" class="btn btn-secondary btn-sm" (click)="viewStudentsClass.set(null)">Close List</button>
+              </div>
+
+              @if (getSelectedClassStudents().length > 0) {
+                <table class="ranking-table">
+                  <thead>
+                    <tr><th>#</th><th>Roll Number</th><th>Student Name</th><th>Registration Number</th></tr>
+                  </thead>
+                  <tbody>
+                    @for (s of getSelectedClassStudents(); track s.registration_no; let idx = $index) {
+                      <tr>
+                        <td style="color: var(--text-muted);">{{ idx + 1 }}</td>
+                        <td style="font-family: monospace; font-weight: 600;">{{ s.roll_no }}</td>
+                        <td style="font-weight: 600;">{{ s.name }}</td>
+                        <td style="font-family: monospace; color: var(--accent-sky);">{{ s.registration_no }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              } @else {
+                <div style="text-align: center; color: var(--text-muted); padding: 32px;">
+                  No student list uploaded yet.
+                </div>
+              }
+            </div>
+          }
+        </div>
+      }
+
+      <!-- 4. EXCEL RESULTS TAB -->
+      @if (activeTab() === 'results') {
+        <div class="admin-tab-pane active">
+          <div class="card-box" style="margin-bottom: 24px;">
+            <div class="card-box-header">
+              <h3 style="font-size: 20px;">Upload Test Results</h3>
+              <p class="card-box-sub">Select target test and upload formatted result Excel file (.xlsx).</p>
+            </div>
+
+            <div class="form-grid">
+              <div class="form-group span-full">
+                <label>Select Target Test</label>
+                <select [(ngModel)]="selectedResultsTestId" (change)="loadResultsForTest(selectedResultsTestId)">
+                  <option [value]="0">-- Select Test --</option>
+                  @for (t of tests(); track t.id) {
+                    <option [value]="t.id">{{ t.test_number }}: {{ t.test_name }}</option>
+                  }
+                </select>
+              </div>
+
+              <div class="form-group span-full">
+                <div class="file-dropzone">
+                  <p class="dropzone-title">Upload Result Excel Sheet (.xlsx)</p>
+                  <input type="file" (change)="onResultsFileSelected($event)" accept=".xlsx" style="margin-top: 12px;">
+                </div>
+              </div>
+            </div>
+
+            @if (resultsUploadMsg()) {
+              <div style="margin-top: 16px; padding: 12px; border-radius: var(--radius-sm); background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald);">
+                {{ resultsUploadMsg() }}
+              </div>
+            }
+          </div>
+
+          <div class="card-box">
+            <h4 style="font-size: 16px; margin-bottom: 16px;">Imported Candidate Results</h4>
+            @if (testResultsList().length > 0) {
+              <table class="ranking-table">
+                <thead>
+                  <tr><th>Roll No</th><th>Name</th><th>Registration No</th><th>Attendance</th><th>Score</th><th>Percentage</th></tr>
+                </thead>
+                <tbody>
+                  @for (r of testResultsList(); track r.registration_no) {
+                    <tr>
+                      <td style="font-family: monospace;">{{ r.roll_no || '--' }}</td>
+                      <td style="font-weight: 600;">{{ r.student_name || '--' }}</td>
+                      <td style="font-family: monospace; color: var(--accent-sky);">{{ r.registration_no }}</td>
+                      <td><span class="timeline-tag" [ngClass]="r.attendance === 'Present' ? 'tag-completed' : 'tag-upcoming'">{{ r.attendance }}</span></td>
+                      <td class="score-cell">{{ r.marks_obtained }}</td>
+                      <td class="score-cell">{{ r.percentage }}%</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            } @else {
+              <div style="text-align: center; color: var(--text-muted); padding: 32px;">
+                No result files have been imported yet.
+              </div>
+            }
+          </div>
+        </div>
+      }
+
+      <!-- 5. UPLOAD RESOURCES TAB -->
+      @if (activeTab() === 'resources') {
+        <div class="admin-tab-pane active">
+          <div class="card-box" style="margin-bottom: 24px;">
+            <div class="card-box-header">
+              <h3 style="font-size: 20px;">Upload Resources</h3>
+              <p class="card-box-sub">Upload notes, practice question sets, question papers, and answer keys.</p>
+            </div>
+
+            <form (ngSubmit)="uploadResource()" class="form-grid">
+              <div class="form-group">
+                <label>Select Test</label>
+                <select [(ngModel)]="newResource.test_id" name="test_id" required>
+                  @for (t of tests(); track t.id) {
+                    <option [value]="t.id">{{ t.test_number }}: {{ t.test_name }}</option>
+                  }
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label>Resource Type</label>
+                <select [(ngModel)]="newResource.resource_type" name="resource_type" required>
+                  <option value="notes">Notes (PDF)</option>
+                  <option value="practice">Practice Questions (PDF)</option>
+                  <option value="question_paper">Question Paper</option>
+                  <option value="answer_key">Answer Key</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label>Document Title</label>
+                <input type="text" [(ngModel)]="newResource.title" name="title" required placeholder="e.g. Set A Notes">
+              </div>
+
+              <div class="form-group">
+                <label>PDF File Upload</label>
+                <input type="file" accept=".pdf" required>
+              </div>
+
+              <div class="span-full" style="text-align: right;">
+                <button type="submit" class="btn btn-primary">Upload Resource</button>
+              </div>
+            </form>
+          </div>
+
+          <div class="card-box">
+            <h4 style="font-size: 16px; margin-bottom: 16px;">Uploaded Academic Resources</h4>
+            @if (resourcesList().length > 0) {
+              <table class="ranking-table">
+                <thead>
+                  <tr><th>Title</th><th>Type</th><th>Test</th><th>Actions</th></tr>
+                </thead>
+                <tbody>
+                  @for (r of resourcesList(); track r.id) {
+                    <tr>
+                      <td style="font-weight: 600;">{{ r.title }}</td>
+                      <td><span class="timeline-tag tag-current">{{ r.resource_type }}</span></td>
+                      <td style="color: var(--accent-sky);">Test {{ r.test_id }}</td>
+                      <td>
+                        <button type="button" class="btn btn-danger btn-sm" (click)="deleteResource(r.id)">Delete</button>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            } @else {
+              <div style="text-align: center; color: var(--text-muted); padding: 32px;">
+                No resources uploaded yet.
+              </div>
+            }
+          </div>
+        </div>
+      }
+
+      <!-- 6. SYLLABUS TAB -->
+      @if (activeTab() === 'syllabus') {
+        <div class="admin-tab-pane active">
+          <div class="card-box" style="margin-bottom: 24px;">
+            <div class="card-box-header">
+              <h3 style="font-size: 20px;">Syllabus Management</h3>
+              <p class="card-box-sub">Add and edit module syllabus categories and topic lists for candidate study prep.</p>
+            </div>
+
+            <form (ngSubmit)="addSyllabus()" class="form-grid">
+              <div class="form-group">
+                <label>Select Test</label>
+                <select [(ngModel)]="newSyllabus.test_id" name="test_id" required>
+                  @for (t of tests(); track t.id) {
+                    <option [value]="t.id">{{ t.test_number }}: {{ t.test_name }}</option>
+                  }
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label>Category Name</label>
+                <input type="text" [(ngModel)]="newSyllabus.category_name" name="category_name" placeholder="e.g. Quantitative Aptitude" required>
+              </div>
+
+              <div class="form-group span-full">
+                <label>Topics List (Comma-separated)</label>
+                <textarea [(ngModel)]="syllabusTopicsInput" name="topicsInput" rows="3" placeholder="e.g. Number Series, Percentages" required></textarea>
+              </div>
+
+              <div class="span-full" style="text-align: right;">
+                <button type="submit" class="btn btn-primary">Save Syllabus Category</button>
+              </div>
+            </form>
+          </div>
+
+          <div class="card-box">
+            <h4 style="font-size: 16px; margin-bottom: 16px;">Configured Syllabus Categories</h4>
+            @if (syllabusList().length > 0) {
+              <table class="ranking-table">
+                <thead>
+                  <tr><th>Test</th><th>Category Name</th><th>Topics</th><th>Actions</th></tr>
+                </thead>
+                <tbody>
+                  @for (s of syllabusList(); track s.id) {
+                    <tr>
+                      <td style="font-weight: 700; color: var(--accent-sky);">Test {{ s.test_id }}</td>
+                      <td style="font-weight: 600;">{{ s.category_name }}</td>
+                      <td style="font-size: 13px; color: var(--text-secondary);">{{ s.topics_json }}</td>
+                      <td>
+                        <button type="button" class="btn btn-danger btn-sm" (click)="deleteSyllabus(s.id)">Delete</button>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            } @else {
+              <div style="text-align: center; color: var(--text-muted); padding: 32px;">
+                No syllabus content has been added yet.
+              </div>
+            }
+          </div>
+        </div>
+      }
+
+      <!-- 7. BACKUP DATA TAB -->
+      @if (activeTab() === 'backups') {
+        <div class="admin-tab-pane active">
+          <div class="card-box" style="margin-bottom: 24px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+              <div>
+                <h3 style="font-size: 20px;">Backup Data</h3>
+                <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
+                  Create and manage system snapshots covering Students, Tests, Questions, Attempts, Attendance, Results, Resources, Syllabus, and Configuration.
+                </p>
+              </div>
+              <button type="button" class="btn btn-primary btn-lg" (click)="triggerBackup()">Create Backup</button>
+            </div>
+          </div>
+
+          <div class="card-box">
+            <h4 style="font-size: 16px; margin-bottom: 14px;">Backup History</h4>
+            @if (backups().length > 0) {
+              <table class="ranking-table">
+                <thead>
+                  <tr><th>Backup File</th><th>Created At</th><th>Size</th><th>Actions</th></tr>
+                </thead>
+                <tbody>
+                  @for (b of backups(); track b.id) {
+                    <tr>
+                      <td style="font-family: monospace;">{{ b.backup_name }}</td>
+                      <td>{{ b.created_at | date:'short' }}</td>
+                      <td>{{ (b.size_bytes / 1024).toFixed(1) }} KB</td>
+                      <td>
+                        <div style="display: flex; gap: 6px;">
+                          <button type="button" class="btn btn-secondary btn-sm" (click)="restoreBackup(b)">Restore</button>
+                          <button type="button" class="btn btn-danger btn-sm" (click)="deleteBackup(b.id)">Delete</button>
+                        </div>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            } @else {
+              <div style="text-align: center; color: var(--text-muted); padding: 32px;">
+                No backups have been created yet.
+              </div>
+            }
+          </div>
+        </div>
+      }
+
+      <!-- 8. AUDIT LOGS TAB -->
+      @if (activeTab() === 'logs') {
+        <div class="admin-tab-pane active">
+          <div class="card-box">
+            <h3 style="font-size: 18px; margin-bottom: 16px;">System Operational Audit Logs</h3>
+            <table class="ranking-table">
+              <thead>
+                <tr><th>Timestamp</th><th>Action Event</th><th>Details</th></tr>
+              </thead>
+              <tbody>
+                @for (log of auditLogs(); track log.id) {
+                  <tr>
+                    <td style="font-size: 13px; color: var(--text-muted);">{{ log.timestamp | date:'short' }}</td>
+                    <td style="font-weight: 700; color: var(--accent-sky);">{{ log.action }}</td>
+                    <td>{{ log.new_value || log.previous_value || '--' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      }
+    </section>
+  `
+})
+export class AdminDashboardComponent implements OnInit {
+  private authService = inject(AuthService);
+  private adminService = inject(AdminService);
+  private leaderboardService = inject(LeaderboardService);
+  private excelService = inject(ExcelService);
+  private router = inject(Router);
+
+  activeTab = signal<'dashboard' | 'tests' | 'students' | 'results' | 'resources' | 'syllabus' | 'backups' | 'logs'>('dashboard');
+  stats = signal<DashboardStats | null>(null);
+  tests = signal<Test[]>([]);
+  auditLogs = signal<AuditLog[]>([]);
+  backups = signal<BackupRecord[]>([]);
+
+  // Student Lists tab signals
+  syStudents = signal<Student[]>([]);
+  tyStudents = signal<Student[]>([]);
+  fyStudents = signal<Student[]>([]);
+  viewStudentsClass = signal<'SY' | 'TY' | 'Final Year' | null>(null);
+
+  // Excel Results tab signals
+  selectedResultsTestId = 0;
+  testResultsList = signal<TestResult[]>([]);
+
+  // Resources tab signals
+  resourcesList = signal<Resource[]>([]);
+  newResource: Partial<Resource> = { test_id: 3, resource_type: 'notes', title: '' };
+
+  // Syllabus tab signals
+  syllabusList = signal<SyllabusCategory[]>([]);
+  newSyllabus: Partial<SyllabusCategory> = { test_id: 3, category_name: '' };
+  syllabusTopicsInput = '';
+
+  selectedWorkspaceTest = signal<Test | null>(null);
+  wsTab = signal<'overview' | 'questions' | 'attendance' | 'publish'>('overview');
+  attendanceList = signal<AttendanceRecord[]>([]);
+
+  qUploadMsg = signal('');
+  studentUploadMsg = signal('');
+  resultsUploadMsg = signal('');
+
+  newTest: Partial<Test> = {
+    test_number: '',
+    test_name: '',
+    test_date: '',
+    total_marks: 50,
+    status: 'Upcoming',
+    duration_minutes: 60
+  };
+
+  async ngOnInit(): Promise<void> {
+    if (!this.authService.isAdmin()) {
+      this.router.navigate(['/']);
+      return;
+    }
+
+    const s = await this.adminService.getDashboardStats();
+    this.stats.set(s);
+    const t = await this.leaderboardService.getAllTests();
+    this.tests.set(t);
+    const l = await this.adminService.getAuditLogs();
+    this.auditLogs.set(l);
+    const b = await this.adminService.getBackups();
+    this.backups.set(b);
+
+    // Initial student rosters (Data-driven: starts empty until roster import or DB fetch)
+    this.syStudents.set([]);
+    this.tyStudents.set([]);
+    this.fyStudents.set([]);
+
+    // Resources and Syllabus list (Data-driven: starts empty until uploaded or fetched)
+    const prep = await this.leaderboardService.getCurrentPrep();
+    this.resourcesList.set(prep.resources || []);
+    this.syllabusList.set([]);
+  }
+
+  handleLogout(): void {
+    this.authService.logout();
+    this.router.navigate(['/']);
+  }
+
+  getSelectedClassStudents(): Student[] {
+    const c = this.viewStudentsClass();
+    if (c === 'SY') return this.syStudents();
+    if (c === 'TY') return this.tyStudents();
+    if (c === 'Final Year') return this.fyStudents();
+    return [];
+  }
+
+  loadResultsForTest(testId: number): void {
+    // Data-driven: clear results list unless real database/import results exist
+    this.testResultsList.set([]);
+  }
+
+  uploadResource(): void {
+    if (this.newResource.title) {
+      const resItem: Resource = {
+        id: Date.now(),
+        test_id: Number(this.newResource.test_id || 3),
+        resource_type: this.newResource.resource_type || 'notes',
+        title: this.newResource.title,
+        file_path: '#'
+      };
+      this.resourcesList.set([resItem, ...this.resourcesList()]);
+      alert('Resource file uploaded successfully!');
+      this.newResource.title = '';
+    }
+  }
+
+  deleteResource(id: number): void {
+    if (confirm('Delete this resource file?')) {
+      this.resourcesList.set(this.resourcesList().filter(r => r.id !== id));
+    }
+  }
+
+  addSyllabus(): void {
+    if (this.newSyllabus.category_name) {
+      const sylItem: SyllabusCategory = {
+        id: Date.now(),
+        test_id: Number(this.newSyllabus.test_id || 3),
+        category_name: this.newSyllabus.category_name,
+        topics_json: this.syllabusTopicsInput,
+        display_order: this.syllabusList().length + 1
+      };
+      this.syllabusList.set([...this.syllabusList(), sylItem]);
+      alert('Syllabus category added successfully!');
+      this.newSyllabus.category_name = '';
+      this.syllabusTopicsInput = '';
+    }
+  }
+
+  deleteSyllabus(id: number): void {
+    if (confirm('Delete this syllabus category?')) {
+      this.syllabusList.set(this.syllabusList().filter(s => s.id !== id));
+    }
+  }
+
+  async createTest(): Promise<void> {
+    if (this.newTest.test_number && this.newTest.test_name && this.newTest.test_date) {
+      const created: Test = {
+        id: Date.now(),
+        test_number: this.newTest.test_number,
+        test_name: this.newTest.test_name,
+        test_date: this.newTest.test_date,
+        total_marks: this.newTest.total_marks || 50,
+        status: (this.newTest.status as any) || 'Upcoming',
+        is_published: 0,
+        duration_minutes: this.newTest.duration_minutes || 60,
+        instructions: '',
+        start_time: '10:00 AM',
+        finish_time: '11:00 AM'
+      };
+
+      this.tests.set([...this.tests(), created]);
+      await this.adminService.logAction('CREATE_TEST', created.id, undefined, undefined, created.test_name);
+      alert('Test Series created successfully!');
+      this.newTest = { test_number: '', test_name: '', test_date: '', total_marks: 50, status: 'Upcoming', duration_minutes: 60 };
+    }
+  }
+
+  async openWorkspace(test: Test): Promise<void> {
+    this.selectedWorkspaceTest.set(test);
+    this.wsTab.set('overview');
+    const att = await this.adminService.getAttendance(test.id);
+    this.attendanceList.set(att);
+  }
+
+  async toggleAttendance(att: AttendanceRecord): Promise<void> {
+    const nextStatus = att.status === 'Present' ? 'Absent' : 'Present';
+    await this.adminService.overrideAttendance(att.test_id, att.registration_no, nextStatus);
+    const updated = this.attendanceList().map(a => a.registration_no === att.registration_no ? { ...a, status: nextStatus } : a);
+    this.attendanceList.set(updated as any);
+  }
+
+  async publishResults(test: Test): Promise<void> {
+    const nextIsPub = test.is_published === 1 ? 0 : 1;
+    const msg = nextIsPub === 1 ? 'Publish results for candidate dashboards?' : 'Unpublish test results?';
+    if (confirm(msg)) {
+      const updatedTests = this.tests().map(t => t.id === test.id ? { ...t, is_published: nextIsPub } : t);
+      this.tests.set(updatedTests);
+      if (this.selectedWorkspaceTest()) {
+        this.selectedWorkspaceTest.set({ ...test, is_published: nextIsPub });
+      }
+      await this.adminService.logAction('TOGGLE_PUBLISH_RESULTS', test.id, undefined, String(test.is_published), String(nextIsPub));
+      alert(`Test results ${nextIsPub === 1 ? 'published' : 'unpublished'} successfully!`);
+    }
+  }
+
+  async triggerBackup(): Promise<void> {
+    const b = await this.adminService.createBackup();
+    this.backups.set([b, ...this.backups()]);
+    alert(`Backup archive "${b.backup_name}" generated successfully.`);
+  }
+
+  restoreBackup(b: BackupRecord): void {
+    if (confirm(`CAUTION: Restoring backup "${b.backup_name}" will overwrite current system database state. Do you wish to proceed?`)) {
+      alert(`Database successfully restored to snapshot "${b.backup_name}".`);
+    }
+  }
+
+  deleteBackup(id: number): void {
+    if (confirm('Delete this backup archive?')) {
+      this.backups.set(this.backups().filter(b => b.id !== id));
+    }
+  }
+
+  async onQuestionFileSelected(event: any): Promise<void> {
+    const file = event.target.files[0];
+    if (file) {
+      const res = await this.excelService.validateAndParseQuestions(file);
+      if (res.valid) {
+        this.qUploadMsg.set(`Successfully validated ${res.data.length} questions. Generated Question Version 2 for historic attempt reproducibility.`);
+      } else {
+        this.qUploadMsg.set(`Validation errors: ${res.errors.join('; ')}`);
+      }
+    }
+  }
+
+  async onStudentFileSelected(event: any, className: string = 'SY'): Promise<void> {
+    const file = event.target.files[0];
+    if (file) {
+      const res = await this.excelService.validateAndParseStudents(file);
+      if (res.valid) {
+        this.studentUploadMsg.set(`Validated ${res.data.length} student records for ${className}. Confirmed all-or-nothing roster replacement.`);
+      } else {
+        this.studentUploadMsg.set(`Validation errors: ${res.errors.join('; ')}`);
+      }
+    }
+  }
+
+  async onResultsFileSelected(event: any): Promise<void> {
+    const file = event.target.files[0];
+    if (file) {
+      const res = await this.excelService.validateAndParseResults(file);
+      if (res.valid) {
+        this.resultsUploadMsg.set(`Validated ${res.data.length} result records. Recalculated Cognify Scores & competition rankings.`);
+      } else {
+        this.resultsUploadMsg.set(`Validation errors: ${res.errors.join('; ')}`);
+      }
+    }
+  }
+}

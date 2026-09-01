@@ -1,0 +1,60 @@
+# Dependencies
+node_modules/
+
+# Angular/build output
+dist/
+.angular/
+out-tsc/
+
+# Environment files and secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# IDE/editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Coverage
+coverage/
+
+# TypeScript build/cache files
+*.tsbuildinfo
+
+# Local runtime data
+*.local
+
+# Backend generated/build output
+backend/dist/
+backend/build/
+
+# Local database/cache files if any
+*.sqlite
+*.sqlite3
+
+# Python cache & environment
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Antigravity/Gemini local workspace metadata
+brain/
