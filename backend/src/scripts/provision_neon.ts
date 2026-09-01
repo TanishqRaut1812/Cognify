@@ -166,6 +166,7 @@ async function provisionDatabase() {
       const s3 = new S3Client({
         endpoint,
         region,
+        forcePathStyle: true,
         credentials: {
           accessKeyId,
           secretAccessKey: secretAccessKey || ''

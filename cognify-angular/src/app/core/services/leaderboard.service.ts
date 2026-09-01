@@ -1,6 +1,7 @@
 import { Injectable, signal } from '@angular/core';
-import { SupabaseService } from './supabase.service';
-import { StudentScore, Test, SyllabusCategory, Resource } from '../models/cognify.models';
+import { firstValueFrom } from 'rxjs';
+import { ApiService } from './api.service';
+import { StudentScore, Test, Resource } from '../models/cognify.models';
 
 export interface TimelineData {
   previous: Test | null;
@@ -21,83 +22,73 @@ export class LeaderboardService {
   top10Rankings = signal<{ [key: string]: StudentScore[] }>({ SY: [], TY: [], 'Final Year': [] });
   lastUpdated = signal<string>('');
 
-  constructor(private supabase: SupabaseService) {}
+  constructor(private api: ApiService) {}
 
   async getTop10Rankings(): Promise<{ [key: string]: StudentScore[] }> {
     const grouped: { [key: string]: StudentScore[] } = { SY: [], TY: [], 'Final Year': [] };
-    try {
-      const { data } = await this.supabase.supabase
-        .from('student_scores')
-        .select('*, students(roll_no, name)')
-        .lte('rank', 10)
-        .gt('cognify_score', 0)
-        .order('rank', { ascending: true });
+    const classes = ['SY', 'TY', 'Final Year'];
 
-      if (data && data.length > 0) {
-        data.forEach((row: any) => {
-          const c = row.class_name;
-          if (!grouped[c]) grouped[c] = [];
-          grouped[c].push({
-            registration_no: row.registration_no,
-            student_name: row.students?.name || 'Student',
-            roll_no: row.students?.roll_no || '--',
-            cognify_score: row.cognify_score,
-            completed_tests_count: row.completed_tests_count,
-            rank: row.rank,
-            class_name: c
-          });
-        });
+    for (const cName of classes) {
+      try {
+        const res = await firstValueFrom(this.api.get<any[]>('/leaderboard', { class: cName }));
+        if (res && Array.isArray(res)) {
+          grouped[cName] = res.map((r) => ({
+            registration_no: r.registrationNo || r.reg || '',
+            student_name: r.name || r.studentName || 'Student',
+            roll_no: r.rollNo || '--',
+            cognify_score: r.overallPercentage !== undefined ? r.overallPercentage : r.pct,
+            completed_tests_count: r.completedTestsCount || 1,
+            rank: r.rank,
+            class_name: cName
+          }));
+        }
+      } catch (e) {
+        console.warn(`Failed to fetch leaderboard for class ${cName}:`, e);
       }
-    } catch (e) {
-      console.warn('Could not load leaderboard rankings from Supabase:', e);
     }
     return grouped;
   }
 
   async getFullRankings(className: string): Promise<StudentScore[]> {
     try {
-      const { data } = await this.supabase.supabase
-        .from('student_scores')
-        .select('*, students(roll_no, name)')
-        .eq('class_name', className)
-        .order('rank', { ascending: true });
-
-      if (data && data.length > 0) {
-        return data.map((row: any) => ({
-          registration_no: row.registration_no,
-          student_name: row.students?.name || 'Student',
-          roll_no: row.students?.roll_no || '--',
-          cognify_score: row.cognify_score,
-          completed_tests_count: row.completed_tests_count,
-          rank: row.rank,
+      const res = await firstValueFrom(this.api.get<any[]>('/leaderboard', { class: className }));
+      if (res && Array.isArray(res)) {
+        return res.map((r) => ({
+          registration_no: r.registrationNo || r.reg || '',
+          student_name: r.name || r.studentName || 'Student',
+          roll_no: r.rollNo || '--',
+          cognify_score: r.overallPercentage !== undefined ? r.overallPercentage : r.pct,
+          completed_tests_count: r.completedTestsCount || 1,
+          rank: r.rank,
           class_name: className
         }));
       }
-    } catch (e) {}
-
+    } catch (e) {
+      console.warn(`Failed to fetch full rankings for ${className}:`, e);
+    }
     return [];
   }
 
   async getTimeline(): Promise<TimelineData> {
     try {
-      const { data } = await this.supabase.supabase.from('tests').select('*').order('test_date', { ascending: true });
-      if (data && data.length > 0) {
-        const previous = data.filter((t: Test) => t.status === 'Completed').pop() || null;
-        const current = data.find((t: Test) => t.status === 'Current') || null;
-        const next = data.find((t: Test) => t.status === 'Upcoming') || null;
+      const tests = await firstValueFrom(this.api.get<Test[]>('/tests'));
+      if (tests && tests.length > 0) {
+        const previous = tests.filter((t: Test) => t.status === 'Completed').pop() || null;
+        const current = tests.find((t: Test) => t.status === 'Current') || null;
+        const next = tests.find((t: Test) => t.status === 'Upcoming') || null;
         return { previous, current, next };
       }
     } catch (e) {}
-
     return { previous: null, current: null, next: null };
   }
 
   async getAllTests(): Promise<Test[]> {
     try {
-      const { data } = await this.supabase.supabase.from('tests').select('*').order('test_date', { ascending: true });
-      if (data && data.length > 0) return data;
-    } catch (e) {}
-    return [];
+      const tests = await firstValueFrom(this.api.get<Test[]>('/tests'));
+      return tests || [];
+    } catch (e) {
+      return [];
+    }
   }
 
   async getCurrentPrep(): Promise<CurrentPrepData> {
@@ -109,31 +100,23 @@ export class LeaderboardService {
 
     if (current) {
       try {
-        const { data: catData } = await this.supabase.supabase
-          .from('syllabus')
-          .select('*')
-          .eq('test_id', current.id);
-
-        if (catData) {
-          categories = catData.map((c: any) => ({
+        const sRes = await firstValueFrom(this.api.get<any[]>('/syllabus', { testId: current.id }));
+        if (sRes) {
+          categories = sRes.map((c) => ({
             id: c.id,
-            category_name: c.category_name,
-            topics: typeof c.topics === 'string' ? c.topics.split(',').map((t: string) => t.trim()) : (c.topics || [])
+            category_name: c.categoryName || c.category_name || '',
+            topics: Array.isArray(c.topics) ? c.topics : (c.topics || '').split(',')
           }));
         }
 
-        const { data: resData } = await this.supabase.supabase
-          .from('resources')
-          .select('*')
-          .eq('test_id', current.id);
-
-        if (resData) {
-          resources = resData.map((r: any) => ({
+        const rRes = await firstValueFrom(this.api.get<any[]>('/resources', { testId: current.id }));
+        if (rRes) {
+          resources = rRes.map((r) => ({
             id: r.id,
-            test_id: r.test_id,
-            resource_type: r.resource_type,
+            test_id: r.testId || r.test_id,
+            resource_type: r.type || r.resource_type,
             title: r.title,
-            file_path: r.file_path,
+            file_path: r.storagePath || r.file_path,
             accessible: true
           }));
         }

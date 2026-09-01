@@ -61,9 +61,9 @@ export class AdminLoginModalComponent {
   showPassword = signal(false);
   errorMessage = signal('');
 
-  handleLogin(): void {
+  async handleLogin(): Promise<void> {
     this.errorMessage.set('');
-    const res = this.authService.login(this.passwordInput);
+    const res = await this.authService.login(this.passwordInput);
     if (res.success) {
       this.closeModal.emit();
       this.router.navigate(['/admin']);

@@ -1,6 +1,7 @@
 import { Injectable, signal } from '@angular/core';
-import { SupabaseService } from './supabase.service';
-import { Test, DashboardStats, AuditLog, AttendanceRecord, BackupRecord } from '../models/cognify.models';
+import { firstValueFrom } from 'rxjs';
+import { ApiService } from './api.service';
+import { DashboardStats, AttendanceRecord, AuditLog, BackupRecord } from '../models/cognify.models';
 
 @Injectable({
   providedIn: 'root'
@@ -9,70 +10,100 @@ export class AdminService {
   auditLogs = signal<AuditLog[]>([]);
   backups = signal<BackupRecord[]>([]);
 
-  constructor(private supabase: SupabaseService) {}
+  constructor(private api: ApiService) {}
 
   async getDashboardStats(): Promise<DashboardStats> {
     try {
-      const { data: students } = await this.supabase.supabase.from('students').select('class_name');
-      const { data: tests } = await this.supabase.supabase.from('tests').select('status, is_published');
-
-      if (students && tests) {
-        const sy = students.filter(s => s.class_name === 'SY').length;
-        const ty = students.filter(s => s.class_name === 'TY').length;
-        const fy = students.filter(s => s.class_name === 'Final Year').length;
-
-        const upcoming = tests.filter(t => t.status === 'Upcoming').length;
-        const current = tests.filter(t => t.status === 'Current').length;
-        const completed = tests.filter(t => t.status === 'Completed').length;
-        const published = tests.filter(t => t.is_published === 1).length;
-
+      const res = await firstValueFrom(this.api.get<any>('/admin/dashboard'));
+      if (res) {
         return {
-          students_by_class: { SY: sy, TY: ty, 'Final Year': fy, total: students.length },
-          tests_by_status: { Upcoming: upcoming, Current: current, Completed: completed, Published: published, total: tests.length }
+          students_by_class: {
+            SY: res.studentsByClass?.SY || 0,
+            TY: res.studentsByClass?.TY || 0,
+            'Final Year': res.studentsByClass?.['Final Year'] || 0,
+            total: res.totalStudents || 0
+          },
+          tests_by_status: {
+            Upcoming: 0,
+            Current: res.activeTests || 0,
+            Completed: res.completedTests || 0,
+            Published: res.publishedTests || 0,
+            total: res.totalTests || 0
+          }
         };
       }
-    } catch (e) {}
+    } catch (e) {
+      console.warn('Failed to fetch admin dashboard stats:', e);
+    }
 
     return {
-      students_by_class: { SY: 75, TY: 75, 'Final Year': 75, total: 225 },
-      tests_by_status: { Upcoming: 1, Current: 1, Completed: 2, Published: 2, total: 4 }
+      students_by_class: { SY: 0, TY: 0, 'Final Year': 0, total: 0 },
+      tests_by_status: { Upcoming: 0, Current: 0, Completed: 0, Published: 0, total: 0 }
     };
   }
 
   async getAttendance(testId: number): Promise<AttendanceRecord[]> {
-    return [
-      { id: 1, test_id: testId, registration_no: 'REG2026SY001', student_name: 'Aarav Sharma', roll_no: 'SY-01', status: 'Present', is_late_attempt: 0 },
-      { id: 2, test_id: testId, registration_no: 'REG2026SY002', student_name: 'Ananya Verma', roll_no: 'SY-02', status: 'Absent', is_late_attempt: 1 }
-    ];
-  }
-
-  async overrideAttendance(testId: number, regNo: string, newStatus: 'Present' | 'Absent'): Promise<void> {
-    await this.logAction('OVERRIDE_ATTENDANCE', testId, regNo, undefined, newStatus);
-  }
-
-  async getAuditLogs(): Promise<AuditLog[]> {
     try {
-      const { data } = await this.supabase.supabase.from('audit_logs').select('*').order('timestamp', { ascending: false });
-      if (data && data.length > 0) return data;
-    } catch (e) {}
+      const res = await firstValueFrom(this.api.get<any[]>(`/admin/tests/${testId}/attendance`));
+      if (res && Array.isArray(res)) {
+        return res.map((r) => ({
+          id: r.id,
+          test_id: r.testId || testId,
+          testId: r.testId || testId,
+          registration_no: r.registrationNo,
+          registrationNo: r.registrationNo,
+          student_name: r.studentName,
+          roll_no: r.rollNo || '--',
+          status: r.status,
+          is_late_attempt: 0,
+          updated_at: r.updatedAt
+        }));
+      }
+    } catch (e) {
+      console.warn(`Failed to fetch attendance for test ${testId}:`, e);
+    }
+    return [];
+  }
 
-    return [
-      { id: 1, timestamp: new Date().toISOString(), action: 'SYSTEM_INIT', previous_value: '', new_value: 'System initialized' },
-      { id: 2, timestamp: new Date().toISOString(), action: 'PUBLISH_RESULTS', test_id: 2, previous_value: 'Not Published', new_value: 'Published' }
-    ];
+  async overrideAttendance(testId?: number, target?: number | string, newStatus?: 'Present' | 'Absent'): Promise<void> {
+    try {
+      const tId = testId || 1;
+      let studentId = typeof target === 'number' ? target : parseInt(target as string, 10);
+      if (isNaN(studentId)) studentId = 1;
+      const status = newStatus || 'Present';
+      await firstValueFrom(
+        this.api.put(`/admin/tests/${tId}/attendance/${studentId}`, { status })
+      );
+    } catch (e) {
+      console.warn('Failed to override attendance:', e);
+    }
   }
 
   async logAction(action: string, testId?: number, regNo?: string, prevVal?: string, newVal?: string): Promise<void> {
     try {
-      await this.supabase.supabase.from('audit_logs').insert([{
-        action,
-        test_id: testId,
-        registration_no: regNo,
-        previous_value: prevVal,
-        new_value: newVal,
-        timestamp: new Date().toISOString()
-      }]);
+      if (action === 'TOGGLE_PUBLISH_RESULTS' && testId) {
+        if (newVal === '1') {
+          await firstValueFrom(this.api.post(`/admin/tests/${testId}/publish`));
+        } else {
+          await firstValueFrom(this.api.post(`/admin/tests/${testId}/unpublish`));
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to log admin action or update publish state:', e);
+    }
+  }
+
+  async getAuditLogs(): Promise<AuditLog[]> {
+    try {
+      const res = await firstValueFrom(this.api.get<any[]>('/admin/audit-logs'));
+      if (res && Array.isArray(res)) {
+        return res;
+      }
     } catch (e) {}
+
+    return [
+      { id: 1, timestamp: new Date().toISOString(), action: 'SYSTEM_INIT', previous_value: '', new_value: 'System initialized' }
+    ];
   }
 
   async getBackups(): Promise<BackupRecord[]> {
@@ -89,7 +120,6 @@ export class AdminService {
       file_path: '#',
       size_bytes: 512000
     };
-    await this.logAction('CREATE_BACKUP', undefined, undefined, undefined, b.backup_name);
     return b;
   }
 }

@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
-import { SupabaseService } from './supabase.service';
+import { firstValueFrom } from 'rxjs';
+import { ApiService } from './api.service';
 
 export interface SyllabusItem {
   id: number;
@@ -16,16 +17,26 @@ export interface SyllabusItem {
   providedIn: 'root'
 })
 export class SyllabusService {
-  constructor(private supabaseService: SupabaseService) {}
+  constructor(private api: ApiService) {}
 
   async getSyllabusForTest(testId: number): Promise<SyllabusItem[]> {
-    const { data, error } = await this.supabaseService.supabase
-      .from('syllabus')
-      .select('*')
-      .eq('test_id', testId)
-      .order('display_order', { ascending: true });
-
-    if (error) throw error;
-    return data || [];
+    try {
+      const res = await firstValueFrom(this.api.get<any[]>('/syllabus', { testId }));
+      if (res && Array.isArray(res)) {
+        return res.map((s) => ({
+          id: s.id,
+          class_id: s.classId,
+          test_id: s.testId,
+          category_name: s.categoryName || s.category_name || '',
+          title: s.title || s.categoryName || '',
+          content: s.content || '',
+          topics_json: JSON.stringify(s.topics || []),
+          display_order: s.displayOrder || 0
+        }));
+      }
+    } catch (e) {
+      console.warn(`Failed to fetch syllabus for test ${testId}:`, e);
+    }
+    return [];
   }
 }

@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
-import { SupabaseService } from './supabase.service';
+import { firstValueFrom } from 'rxjs';
+import { ApiService } from './api.service';
 
 export interface AttendanceRecord {
   id?: number;
@@ -14,15 +15,24 @@ export interface AttendanceRecord {
   providedIn: 'root'
 })
 export class AttendanceService {
-  constructor(private supabaseService: SupabaseService) {}
+  constructor(private api: ApiService) {}
 
   async getAttendanceForTest(testId: number): Promise<AttendanceRecord[]> {
-    const { data, error } = await this.supabaseService.supabase
-      .from('attendance')
-      .select('*')
-      .eq('test_id', testId);
-
-    if (error) throw error;
-    return data || [];
+    try {
+      const res = await firstValueFrom(this.api.get<any[]>(`/admin/tests/${testId}/attendance`));
+      if (res && Array.isArray(res)) {
+        return res.map((r) => ({
+          id: r.id,
+          test_id: r.testId || testId,
+          student_id: r.studentId,
+          registration_no: r.registrationNo,
+          status: r.status,
+          updated_by: r.updatedBy || 'Admin'
+        }));
+      }
+    } catch (e) {
+      console.warn(`Failed to fetch attendance for test ${testId}:`, e);
+    }
+    return [];
   }
 }

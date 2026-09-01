@@ -728,7 +728,8 @@ export class AdminDashboardComponent implements OnInit {
     }
   }
 
-  deleteSyllabus(id: number): void {
+  deleteSyllabus(id?: number): void {
+    if (!id) return;
     if (confirm('Delete this syllabus category?')) {
       this.syllabusList.set(this.syllabusList().filter(s => s.id !== id));
     }

@@ -1,6 +1,14 @@
 import { Injectable, signal } from '@angular/core';
-import { SupabaseService } from './supabase.service';
-import { StudentExamQuestion, TestQuestion, StudentAttempt, Student } from '../models/cognify.models';
+import { firstValueFrom } from 'rxjs';
+import { ApiService } from './api.service';
+import { AttemptSessionService, StoredAttemptSession } from './attempt-session.service';
+import {
+  Student,
+  StudentExamQuestion,
+  StudentAttemptDetails,
+  StudentProfile,
+  Test
+} from '../models/cognify.models';
 
 export interface ActiveExamState {
   student: Student;
@@ -9,13 +17,14 @@ export interface ActiveExamState {
   testName: string;
   testNumber: string;
   durationMinutes: number;
-  questions: StudentExamQuestion[]; // Sanitized questions WITHOUT correct_option!
+  questions: StudentExamQuestion[];
   answers: { [questionId: number]: 'A' | 'B' | 'C' | 'D' | '' };
   currentQuestionIndex: number;
   remainingSeconds: number;
   violationCount: number;
   isLateAttempt: boolean;
   isSubmitted: boolean;
+  isTerminated?: boolean;
   score?: number;
   percentage?: number;
   showReviewModal?: boolean;
@@ -27,100 +36,173 @@ export interface ActiveExamState {
 export class ExamService {
   activeExam = signal<ActiveExamState | null>(null);
   private timerInterval: any;
+  private syncQueue: Map<number, 'A' | 'B' | 'C' | 'D' | ''> = new Map();
+  private isSyncing = false;
 
-  constructor(private supabase: SupabaseService) {}
-
-  // Master questions bank with correct options (Kept secure on backend/service side)
-  private secureMasterQuestions: TestQuestion[] = [
-    { id: 101, test_id: 3, question_number: 1, question_text: 'Which 3D shape is formed by folding a net with 6 identical square faces?', option_a: 'Prism', option_b: 'Pyramid', option_c: 'Cube', option_d: 'Cylinder', correct_option: 'C', marks: 15.0, is_active: 1 },
-    { id: 102, test_id: 3, question_number: 2, question_text: 'Looking at a mirror reflection of a clock showing 3:15, what is the actual time?', option_a: '8:45', option_b: '9:15', option_c: '8:15', option_d: '9:45', correct_option: 'A', marks: 15.0, is_active: 1 },
-    { id: 103, test_id: 3, question_number: 3, question_text: 'If CODE is written as ECDF, how is LOGIC written?', option_a: 'NQIKE', option_b: 'NQIKE', option_c: 'NQJKE', option_d: 'MPHJD', correct_option: 'C', marks: 15.0, is_active: 1 },
-    { id: 104, test_id: 3, question_number: 4, question_text: 'Point A is 5m North of B. C is 12m East of A. What is the shortest distance between B and C?', option_a: '13m', option_b: '15m', option_c: '17m', option_d: '20m', correct_option: 'A', marks: 15.0, is_active: 1 },
-    { id: 105, test_id: 3, question_number: 5, question_text: 'All cats are mammals. All mammals are animals. Therefore:', option_a: 'All animals are cats', option_b: 'All cats are animals', option_c: 'Some cats are not animals', option_d: 'No cats are animals', correct_option: 'B', marks: 15.0, is_active: 1 }
-  ];
+  constructor(
+    private api: ApiService,
+    private attemptSession: AttemptSessionService
+  ) {}
 
   async verifyStudent(regNo: string): Promise<{ success: boolean; student?: Student; message?: string }> {
-    const regClean = regNo.trim().toUpperCase();
     try {
-      const { data } = await this.supabase.supabase
-        .from('students')
-        .select('*')
-        .eq('registration_no', regClean)
-        .single();
-
-      if (data) return { success: true, student: data };
-    } catch (e) {}
-
-    // Fallback verification against master roster structure
-    if (regClean.startsWith('REG2026') || regClean.length >= 6) {
-      const cname = regClean.includes('SY') ? 'SY' : regClean.includes('TY') ? 'TY' : 'Final Year';
-      return {
-        success: true,
-        student: {
-          registration_no: regClean,
-          roll_no: '01',
-          name: 'Student ' + regClean,
-          class_name: cname as any
+      const res = await firstValueFrom(
+        this.api.post<{ student: StudentProfile; studentToken?: string }>('/student/verify', { registrationNumber: regNo })
+      );
+      if (res && res.student) {
+        if (res.studentToken) {
+          this.attemptSession.saveStudentToken(res.studentToken);
         }
-      };
+        return {
+          success: true,
+          student: {
+            registration_no: res.student.registrationNumber,
+            registrationNumber: res.student.registrationNumber,
+            name: res.student.name,
+            class_name: res.student.class as any,
+            class: res.student.class
+          }
+        };
+      }
+    } catch (e: any) {
+      return { success: false, message: e.message || 'Registration Number not found in master roster.' };
+    }
+    return { success: false, message: 'Registration Number verification failed.' };
+  }
+
+  async getAvailableTests(regNo: string): Promise<Test[]> {
+    try {
+      return await firstValueFrom(this.api.get<Test[]>('/student/tests', { registrationNumber: regNo }));
+    } catch (e) {
+      return [];
+    }
+  }
+
+  async recoverSession(session?: StoredAttemptSession | null): Promise<ActiveExamState | null> {
+    const s = session || this.attemptSession.loadSession();
+    if (!s || !s.attemptId || !s.attemptToken) {
+      return null;
     }
 
-    return { success: false, message: 'Registration Number not found in student master roster.' };
+    try {
+      // 1. Fetch attempt details from server
+      const attempt = await firstValueFrom(
+        this.api.get<StudentAttemptDetails>(`/student/attempts/${s.attemptId}`)
+      );
+
+      // 2. Fetch questions from server
+      const rawQuestions = await firstValueFrom(
+        this.api.get<any[]>(`/student/attempts/${s.attemptId}/questions`)
+      );
+
+      const questions: StudentExamQuestion[] = (rawQuestions || []).map((q) => ({
+        id: q.id,
+        test_id: q.testId || s.testId,
+        testId: q.testId || s.testId,
+        question_number: q.questionNumber || q.question_number,
+        questionNumber: q.questionNumber || q.question_number,
+        question_text: q.questionText || q.question_text,
+        questionText: q.questionText || q.question_text,
+        option_a: q.optionA || q.option_a,
+        optionA: q.optionA || q.option_a,
+        option_b: q.optionB || q.option_b,
+        optionB: q.optionB || q.option_b,
+        option_c: q.optionC || q.option_c,
+        optionC: q.optionC || q.option_c,
+        option_d: q.optionD || q.option_d,
+        optionD: q.optionD || q.option_d,
+        marks: parseFloat(q.marks)
+      }));
+
+      // 3. Fetch saved answers from server
+      const savedAnswersList = await firstValueFrom(
+        this.api.get<{ answers: Array<{ questionId: number; selectedOption: string }> }>(
+          `/student/attempts/${s.attemptId}/answers`
+        )
+      );
+
+      const initialAnswers: { [qId: number]: 'A' | 'B' | 'C' | 'D' | '' } = {};
+      questions.forEach((q) => (initialAnswers[q.id] = ''));
+      if (savedAnswersList && savedAnswersList.answers) {
+        savedAnswersList.answers.forEach((ans) => {
+          initialAnswers[ans.questionId] = (ans.selectedOption as any) || '';
+        });
+      }
+
+      // Calculate server-authoritative remaining seconds
+      const deadlineMs = new Date(attempt.deadline).getTime();
+      const serverNowMs = new Date(attempt.currentServerTime || Date.now()).getTime();
+      const remainingSeconds = Math.max(0, Math.floor((deadlineMs - serverNowMs) / 1000));
+
+      const isTerminated = attempt.attemptStatus === 'Terminated' || attempt.cheatingFlag;
+      const isSubmitted = attempt.attemptStatus === 'Submitted' || isTerminated;
+
+      const studentProfile: Student = s.student || {
+        registration_no: s.registrationNo,
+        name: s.studentName || 'Student',
+        class_name: (s.className as any) || 'SY'
+      };
+
+      const newState: ActiveExamState = {
+        student: studentProfile,
+        attemptId: attempt.id,
+        testId: attempt.testId,
+        testName: s.testName || 'Cognify Online Examination',
+        testNumber: s.testNumber || `Test ${attempt.testId}`,
+        durationMinutes: Math.round(remainingSeconds / 60),
+        questions,
+        answers: initialAnswers,
+        currentQuestionIndex: 0,
+        remainingSeconds,
+        violationCount: attempt.fullscreenViolationCount || 0,
+        isLateAttempt: false,
+        isSubmitted,
+        isTerminated,
+        showReviewModal: false
+      };
+
+      this.activeExam.set(newState);
+      if (!isSubmitted) {
+        this.startTimer();
+      }
+      return newState;
+    } catch (e) {
+      console.warn('Attempt session recovery failed:', e);
+      this.attemptSession.clearSession();
+      return null;
+    }
   }
 
   async startExam(student: Student, testId: number = 3): Promise<ActiveExamState> {
-    let rawQuestions = this.secureMasterQuestions;
-
     try {
-      const { data } = await this.supabase.supabase
-        .from('test_questions')
-        .select('*')
-        .eq('test_id', testId)
-        .eq('is_active', 1)
-        .order('question_number', { ascending: true });
+      const startRes = await firstValueFrom(
+        this.api.post<{ attempt: StudentAttemptDetails; attemptToken: string }>(
+          `/student/tests/${testId}/start`,
+          { registrationNumber: student.registration_no }
+        )
+      );
 
-      if (data && data.length > 0) rawQuestions = data;
-    } catch (e) {}
+      const attempt = startRes.attempt;
+      const token = startRes.attemptToken;
 
-    // CRITICAL SECURITY ENFORCEMENT: Strip correct_option before returning questions to candidate browser!
-    const sanitizedQuestions: StudentExamQuestion[] = rawQuestions.map(q => ({
-      id: q.id,
-      test_id: q.test_id,
-      question_number: q.question_number,
-      question_text: q.question_text,
-      option_a: q.option_a,
-      option_b: q.option_b,
-      option_c: q.option_c,
-      option_d: q.option_d,
-      marks: q.marks
-    }));
+      const session: StoredAttemptSession = {
+        attemptId: attempt.id,
+        testId: attempt.testId,
+        registrationNo: student.registration_no,
+        studentName: student.name,
+        className: student.class_name,
+        student,
+        attemptToken: token,
+        startedAt: attempt.startedAt,
+        deadline: attempt.deadline,
+        status: attempt.attemptStatus
+      };
+      this.attemptSession.saveSession(session);
 
-    const initialAnswers: { [qId: number]: 'A' | 'B' | 'C' | 'D' | '' } = {};
-    sanitizedQuestions.forEach(q => (initialAnswers[q.id] = ''));
-
-    // Check Finish Time for late attempt marking (Finish Time = attendance window cutoff)
-    const isLate = new Date().getHours() >= 11;
-
-    const newState: ActiveExamState = {
-      student,
-      attemptId: Date.now(),
-      testId,
-      testName: 'Advanced Spatial & Analytical Ability',
-      testNumber: 'Test 03',
-      durationMinutes: 60,
-      questions: sanitizedQuestions,
-      answers: initialAnswers,
-      currentQuestionIndex: 0,
-      remainingSeconds: 60 * 60,
-      violationCount: 0,
-      isLateAttempt: isLate,
-      isSubmitted: false,
-      showReviewModal: false
-    };
-
-    this.activeExam.set(newState);
-    this.startTimer();
-    return newState;
+      return (await this.recoverSession(session))!;
+    } catch (e: any) {
+      throw new Error(e.message || 'Failed to start exam session');
+    }
   }
 
   startTimer(): void {
@@ -148,52 +230,96 @@ export class ExamService {
     const current = this.activeExam();
     if (!current || current.isSubmitted) return;
 
+    // 1. Update Angular local signal UI state immediately
     const newAnswers = { ...current.answers, [questionId]: option };
     this.activeExam.set({ ...current, answers: newAnswers });
+
+    // 2. Queue write request to prevent race conditions
+    this.syncQueue.set(questionId, option);
+    this.processSyncQueue(current.attemptId);
   }
 
-  logViolation(reason: string): number {
-    const current = this.activeExam();
-    if (!current || current.isSubmitted) return 0;
+  private async processSyncQueue(attemptId: number): Promise<void> {
+    if (this.isSyncing || this.syncQueue.size === 0) return;
+    this.isSyncing = true;
 
-    const newCount = current.violationCount + 1;
-    this.activeExam.set({ ...current, violationCount: newCount });
+    while (this.syncQueue.size > 0) {
+      const [questionId, selectedOption] = Array.from(this.syncQueue.entries())[0];
+      this.syncQueue.delete(questionId);
 
-    // Rule: Exits 1, 2, 3 = warnings; 4th Exit = Terminate Test
-    if (newCount >= 4) {
-      this.submitExam('Terminated on 4th fullscreen exit violation');
+      try {
+        await firstValueFrom(
+          this.api.put(`/student/attempts/${attemptId}/answers/${questionId}`, { selectedOption })
+        );
+      } catch (e) {
+        console.warn(`Failed to sync answer for question ${questionId}:`, e);
+      }
     }
-    return newCount;
+
+    this.isSyncing = false;
   }
 
-  submitExam(reason: string = 'User Submitted'): ActiveExamState | null {
+  async logViolation(reason: string): Promise<number> {
+    const current = this.activeExam();
+    if (!current || current.isSubmitted) return current?.violationCount || 0;
+
+    try {
+      const res = await firstValueFrom(
+        this.api.post<{ violationCount: number; terminated: boolean; cheating: boolean }>(
+          `/student/attempts/${current.attemptId}/fullscreen-violation`,
+          { event: reason }
+        )
+      );
+
+      const newCount = res.violationCount;
+      this.activeExam.set({ ...current, violationCount: newCount });
+
+      if (res.terminated) {
+        const submittedState: ActiveExamState = {
+          ...current,
+          violationCount: newCount,
+          isSubmitted: true,
+          isTerminated: true,
+          showReviewModal: false
+        };
+        this.activeExam.set(submittedState);
+        this.attemptSession.clearSession();
+      }
+      return newCount;
+    } catch (e) {
+      return current.violationCount;
+    }
+  }
+
+  async submitExam(reason: string = 'User Submitted'): Promise<ActiveExamState | null> {
     if (this.timerInterval) clearInterval(this.timerInterval);
     const current = this.activeExam();
     if (!current) return null;
 
-    // Secure score evaluation (comparing options to master questions)
-    let score = 0;
-    let totalMarks = 0;
+    // Flush any pending answer syncs before final submission
+    if (this.syncQueue.size > 0) {
+      await this.processSyncQueue(current.attemptId);
+    }
 
-    current.questions.forEach(q => {
-      totalMarks += q.marks;
-      const masterQ = this.secureMasterQuestions.find(m => m.id === q.id);
-      if (masterQ && current.answers[q.id] === masterQ.correct_option) {
-        score += q.marks;
-      }
-    });
+    try {
+      await firstValueFrom(
+        this.api.post<{ success: boolean; status: string; submittedAt: string; message: string }>(
+          `/student/attempts/${current.attemptId}/submit`
+        )
+      );
 
-    const percentage = totalMarks > 0 ? (score / totalMarks) * 100 : 0;
+      const submittedState: ActiveExamState = {
+        ...current,
+        isSubmitted: true,
+        showReviewModal: false
+      };
 
-    const submittedState: ActiveExamState = {
-      ...current,
-      isSubmitted: true,
-      showReviewModal: false,
-      score: Math.round(score * 100) / 100,
-      percentage: Math.round(percentage * 100) / 100
-    };
-
-    this.activeExam.set(submittedState);
-    return submittedState;
+      this.activeExam.set(submittedState);
+      this.attemptSession.clearSession();
+      return submittedState;
+    } catch (e: any) {
+      console.error('Exam submission failed:', e.message);
+      return null;
+    }
   }
 }

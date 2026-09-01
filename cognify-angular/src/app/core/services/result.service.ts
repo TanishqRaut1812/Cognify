@@ -1,44 +1,40 @@
 import { Injectable } from '@angular/core';
-import { SupabaseService } from './supabase.service';
-
-export interface TestResult {
-  id?: number;
-  test_id: number;
-  student_id?: number;
-  registration_no: string;
-  attendance: 'Present' | 'Absent';
-  marks_obtained: number;
-  percentage: number;
-  published: number;
-}
+import { firstValueFrom } from 'rxjs';
+import { ApiService } from './api.service';
+import { StudentResult } from '../models/cognify.models';
 
 @Injectable({
   providedIn: 'root'
 })
 export class ResultService {
-  constructor(private supabaseService: SupabaseService) {}
+  constructor(private api: ApiService) {}
 
-  async getPublishedResults(testId: number): Promise<TestResult[]> {
-    const { data, error } = await this.supabaseService.supabase
-      .from('test_results')
-      .select('*')
-      .eq('test_id', testId)
-      .eq('published', 1);
-
-    if (error) throw error;
-    return data || [];
+  async getStudentResults(registrationNumber: string): Promise<StudentResult[]> {
+    try {
+      const res = await firstValueFrom(
+        this.api.get<any[]>('/student/results', { registrationNumber })
+      );
+      if (res && Array.isArray(res)) {
+        return res.map((r) => ({
+          test_id: r.testId,
+          testId: r.testId,
+          testTitle: r.testTitle,
+          totalMarks: r.totalMarks,
+          attendance: r.attendance,
+          published: Boolean(r.published),
+          marks_obtained: r.published ? r.marksObtained : null,
+          marksObtained: r.published ? r.marksObtained : null,
+          percentage: r.published ? r.percentage : null
+        }));
+      }
+    } catch (e) {
+      console.warn(`Failed to fetch student results for ${registrationNumber}:`, e);
+    }
+    return [];
   }
 
-  async getStudentResult(testId: number, regNo: string): Promise<TestResult | null> {
-    const { data, error } = await this.supabaseService.supabase
-      .from('test_results')
-      .select('*')
-      .eq('test_id', testId)
-      .eq('registration_no', regNo)
-      .eq('published', 1)
-      .maybeSingle();
-
-    if (error) return null;
-    return data;
+  async getStudentResultForTest(testId: number, regNo: string): Promise<StudentResult | null> {
+    const results = await this.getStudentResults(regNo);
+    return results.find((r) => (r.test_id === testId || r.testId === testId) && r.published) || null;
   }
 }

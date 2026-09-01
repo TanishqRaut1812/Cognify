@@ -1,51 +1,73 @@
-import express, { Request, Response } from 'express';
-import cors from 'cors';
-import { env } from './config/env.config.js';
-import { pool } from './db/pool.js';
-import { errorHandler } from './middleware/error.middleware.js';
+import http from 'http';
+import app from './app';
+import { env, validateEnv } from './config/env.config';
+import { closePool } from './db/pool';
+import { logger } from './utils/logger';
 
-const app = express();
+// 1. VALIDATE ENVIRONMENT AT STARTUP
+try {
+  validateEnv();
+} catch (err: any) {
+  logger.error('Startup halted due to missing configuration:', err.message);
+  process.exit(1);
+}
 
-app.use(cors({
-  origin: true,
-  credentials: true
-}));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// 2. CREATE HTTP SERVER
+const server = http.createServer(app);
 
-// HEALTH CHECK ENDPOINT
-app.get('/api/health', async (req: Request, res: Response) => {
-  try {
-    const dbRes = await pool.query('SELECT NOW()');
-    res.json({
-      status: 'ok',
-      timestamp: new Date().toISOString(),
-      db: 'connected',
-      db_time: dbRes.rows[0].now
-    });
-  } catch (err: any) {
-    res.status(500).json({
-      status: 'error',
-      message: 'Database connection failed',
-      error: err.message
-    });
-  }
-});
-
-// GLOBAL ERROR HANDLER
-app.use(errorHandler);
-
-const PORT = parseInt(env.PORT, 10) || 3000;
+const PORT = env.PORT;
 
 if (process.env.NODE_ENV !== 'test') {
-  app.listen(PORT, () => {
-    console.log(`==================================================`);
-    console.log(` Cognify Node.js Express Backend API Engine`);
-    console.log(` Running on port: ${PORT}`);
-    console.log(` Environment: ${env.NODE_ENV}`);
-    console.log(` Neon Connection Pool: Active (Max 20 Connections)`);
-    console.log(`==================================================`);
+  server.listen(PORT, () => {
+    logger.info(`==================================================`);
+    logger.info(` Cognify Production Backend Engine`);
+    logger.info(` Server Listening on Port: ${PORT}`);
+    logger.info(` Environment: ${env.NODE_ENV}`);
+    logger.info(` Neon Connection Pool: Active (Max 20 Connections)`);
+    logger.info(` Neon Object Storage: Configured (${env.NEON_STORAGE_REGION})`);
+    logger.info(`==================================================`);
   });
 }
 
-export default app;
+// 3. GRACEFUL SHUTDOWN HANDLING
+let isShuttingDown = false;
+
+export async function gracefulShutdown(signal: string): Promise<void> {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+
+  logger.info(`Received ${signal}. Initiating graceful shutdown...`);
+
+  server.close(async (err) => {
+    if (err) {
+      logger.error('Error closing HTTP server:', err);
+    } else {
+      logger.info('HTTP server stopped accepting connections.');
+    }
+
+    try {
+      await closePool();
+      logger.info('Graceful shutdown completed successfully.');
+      if (process.env.NODE_ENV !== 'test') {
+        process.exit(0);
+      }
+    } catch (dbErr) {
+      logger.error('Error closing database pool during shutdown:', dbErr);
+      if (process.env.NODE_ENV !== 'test') {
+        process.exit(1);
+      }
+    }
+  });
+
+  setTimeout(() => {
+    logger.error('Forced shutdown due to timeout.');
+    if (process.env.NODE_ENV !== 'test') {
+      process.exit(1);
+    }
+  }, 10000).unref();
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+export { server };

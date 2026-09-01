@@ -1,43 +1,41 @@
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
-import { env } from '../config/env.config.js';
+import { verifyAdminToken, AdminJwtPayload } from '../services/adminAuth.service';
+import { sendError } from '../utils/apiResponse';
 
 export interface AuthenticatedRequest extends Request {
-  user?: {
-    role: 'admin' | 'student';
-    registration_no?: string;
-    test_id?: number;
-  };
+  user?: AdminJwtPayload;
 }
 
-export function authMiddleware(requiredRole?: 'admin' | 'student') {
-  return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
-    const authHeader = req.headers.authorization;
+export function requireAdminAuth(req: AuthenticatedRequest, res: Response, next: NextFunction): void {
+  try {
     let token: string | undefined;
 
+    // 1. Check Authorization Bearer Header
+    const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
-      token = authHeader.split(' ')[1];
-    } else if (req.cookies && req.cookies.cognify_token) {
-      token = req.cookies.cognify_token;
+      token = authHeader.substring(7).trim();
+    }
+
+    // 2. Fallback to Cookie header parsing
+    if (!token && req.headers.cookie) {
+      const cookies = req.headers.cookie.split(';').map((c) => c.trim());
+      const tokenCookie = cookies.find((c) => c.startsWith('admin_token='));
+      if (tokenCookie) {
+        token = tokenCookie.substring('admin_token='.length).trim();
+      }
     }
 
     if (!token) {
-      res.status(401).json({ success: false, message: 'Authentication required. No token provided.' });
+      sendError(res, 'Admin authentication required', 'UNAUTHORIZED', 401);
       return;
     }
 
-    try {
-      const decoded = jwt.verify(token, env.JWT_SECRET) as any;
-      req.user = decoded;
-
-      if (requiredRole && req.user?.role !== requiredRole) {
-        res.status(403).json({ success: false, message: 'Forbidden: Insufficient privileges.' });
-        return;
-      }
-
-      next();
-    } catch (err) {
-      res.status(401).json({ success: false, message: 'Invalid or expired session token.' });
-    }
-  };
+    const decoded = verifyAdminToken(token);
+    req.user = decoded;
+    next();
+  } catch (err: any) {
+    const statusCode = err.statusCode || 401;
+    const code = err.code || 'UNAUTHORIZED';
+    sendError(res, err.message || 'Authentication failed', code, statusCode);
+  }
 }

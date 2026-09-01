@@ -1,5 +1,7 @@
 import { Injectable } from '@angular/core';
-import { SupabaseService } from './supabase.service';
+import { firstValueFrom } from 'rxjs';
+import { ApiService } from './api.service';
+import { StudentAttemptDetails } from '../models/cognify.models';
 
 export interface Attempt {
   id?: number;
@@ -18,29 +20,19 @@ export interface Attempt {
   providedIn: 'root'
 })
 export class AttemptService {
-  constructor(private supabaseService: SupabaseService) {}
+  constructor(private api: ApiService) {}
 
-  async getAttempt(testId: number, regNo: string): Promise<Attempt | null> {
-    const { data, error } = await this.supabaseService.supabase
-      .from('student_attempts')
-      .select('*')
-      .eq('test_id', testId)
-      .eq('registration_no', regNo)
-      .maybeSingle();
-
-    if (error) return null;
-    return data;
+  async getAttemptDetails(attemptId: number): Promise<StudentAttemptDetails | null> {
+    try {
+      return await firstValueFrom(this.api.get<StudentAttemptDetails>(`/student/attempts/${attemptId}`));
+    } catch (e) {
+      return null;
+    }
   }
 
   async saveAnswer(attemptId: number, questionId: number, selectedAnswer: string): Promise<void> {
-    const { error } = await this.supabaseService.supabase
-      .from('student_answers')
-      .upsert({
-        attempt_id: attemptId,
-        question_id: questionId,
-        selected_answer: selectedAnswer
-      }, { onConflict: 'attempt_id,question_id' });
-
-    if (error) throw error;
+    await firstValueFrom(
+      this.api.put(`/student/attempts/${attemptId}/answers/${questionId}`, { selectedOption: selectedAnswer })
+    );
   }
 }

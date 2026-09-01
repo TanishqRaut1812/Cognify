@@ -1,58 +1,67 @@
 import { Injectable } from '@angular/core';
-import { SupabaseService } from './supabase.service';
-
-export interface Student {
-  id?: number;
-  registration_number: string;
-  roll_number: string;
-  name: string;
-  class_id?: number;
-  class_name: 'SY' | 'TY' | 'Final Year';
-}
+import { firstValueFrom } from 'rxjs';
+import { ApiService } from './api.service';
+import { Student } from '../models/cognify.models';
 
 @Injectable({
   providedIn: 'root'
 })
 export class StudentService {
-  constructor(private supabaseService: SupabaseService) {}
+  constructor(private api: ApiService) {}
 
   async getStudentsByClass(className: string): Promise<Student[]> {
-    const { data, error } = await this.supabaseService.supabase
-      .from('students')
-      .select('*')
-      .eq('class_name', className)
-      .order('roll_number', { ascending: true });
-
-    if (error) throw error;
-    return data || [];
+    try {
+      const res = await firstValueFrom(this.api.get<any[]>('/admin/students', { class: className }));
+      if (res && Array.isArray(res)) {
+        return res.map((s) => ({
+          id: s.id,
+          registration_no: s.registrationNo || s.registration_no,
+          registrationNumber: s.registrationNo || s.registration_no,
+          roll_no: s.rollNo || s.roll_no,
+          rollNumber: s.rollNo || s.roll_no,
+          name: s.name,
+          class_name: s.className || s.class_name
+        }));
+      }
+    } catch (e) {
+      console.warn(`Failed to fetch students for class ${className}:`, e);
+    }
+    return [];
   }
 
   async getStudentByRegistrationNo(regNo: string): Promise<Student | null> {
-    const { data, error } = await this.supabaseService.supabase
-      .from('students')
-      .select('*')
-      .eq('registration_number', regNo)
-      .single();
-
-    if (error) return null;
-    return data;
+    try {
+      const res = await firstValueFrom(this.api.post<any>('/student/verify', { registrationNumber: regNo }));
+      if (res && res.student) {
+        return {
+          id: res.student.id,
+          registration_no: res.student.registrationNumber,
+          registrationNumber: res.student.registrationNumber,
+          name: res.student.name,
+          class_name: res.student.class
+        };
+      }
+    } catch (e) {}
+    return null;
   }
 
   async addStudent(student: { name: string; registration_number: string; roll_number: string; class_name: string }): Promise<Student> {
-    const { data, error } = await this.supabaseService.supabase
-      .from('students')
-      .insert({
+    const res = await firstValueFrom(
+      this.api.post<any>('/admin/students', {
         name: student.name.trim(),
-        registration_number: student.registration_number.trim(),
-        registration_no: student.registration_number.trim(),
-        roll_number: student.roll_number.trim(),
-        roll_no: student.roll_number.trim(),
-        class_name: student.class_name
+        registrationNo: student.registration_number.trim(),
+        rollNo: student.roll_number.trim(),
+        className: student.class_name
       })
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
+    );
+    return {
+      id: res.id,
+      registration_no: res.registrationNo || res.registration_no,
+      registrationNumber: res.registrationNo || res.registration_no,
+      roll_no: res.rollNo || res.roll_no,
+      rollNumber: res.rollNo || res.roll_no,
+      name: res.name,
+      class_name: res.className || res.class_name
+    };
   }
 }
