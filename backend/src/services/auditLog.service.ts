@@ -49,3 +49,21 @@ export async function createAuditLog(
     await query(sql, params);
   }
 }
+
+export async function getAuditLogsAdmin(limit = 100): Promise<any[]> {
+  const res = await query(
+    `SELECT id, action, entity_type AS "entityType", entity_id AS "entityId", details, admin_identifier AS "adminIdentifier", registration_no AS "registrationNo", created_at AS "createdAt", previous_value AS "previous_value", new_value AS "new_value"
+     FROM audit_logs
+     ORDER BY id DESC
+     LIMIT $1;`,
+    [limit]
+  );
+  return res.rows.map((r) => ({
+    id: r.id,
+    timestamp: r.createdAt ? new Date(r.createdAt).toISOString() : new Date().toISOString(),
+    action: r.action,
+    previous_value: r.previous_value || '',
+    new_value: r.new_value || r.details || ''
+  }));
+}
+

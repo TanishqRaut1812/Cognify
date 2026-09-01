@@ -6,6 +6,7 @@ import { AuthService } from '../../core/services/auth.service';
 import { AdminService } from '../../core/services/admin.service';
 import { LeaderboardService } from '../../core/services/leaderboard.service';
 import { ExcelService } from '../../core/services/excel.service';
+import { StudentService } from '../../core/services/student.service';
 import { Test, DashboardStats, AuditLog, BackupRecord, AttendanceRecord, Student, Resource, SyllabusCategory, TestResult } from '../../core/models/cognify.models';
 
 @Component({
@@ -601,6 +602,7 @@ import { Test, DashboardStats, AuditLog, BackupRecord, AttendanceRecord, Student
 export class AdminDashboardComponent implements OnInit {
   private authService = inject(AuthService);
   private adminService = inject(AdminService);
+  private studentService = inject(StudentService);
   private leaderboardService = inject(LeaderboardService);
   private excelService = inject(ExcelService);
   private router = inject(Router);
@@ -662,15 +664,38 @@ export class AdminDashboardComponent implements OnInit {
     const b = await this.adminService.getBackups();
     this.backups.set(b);
 
-    // Initial student rosters (Data-driven: starts empty until roster import or DB fetch)
-    this.syStudents.set([]);
-    this.tyStudents.set([]);
-    this.fyStudents.set([]);
+    await this.loadRosters();
 
     // Resources and Syllabus list (Data-driven: starts empty until uploaded or fetched)
     const prep = await this.leaderboardService.getCurrentPrep();
     this.resourcesList.set(prep.resources || []);
     this.syllabusList.set([]);
+  }
+
+  async loadRosters(): Promise<void> {
+    try {
+      const [sy, ty, fy] = await Promise.all([
+        this.studentService.getStudentsByClass('SY'),
+        this.studentService.getStudentsByClass('TY'),
+        this.studentService.getStudentsByClass('Final Year')
+      ]);
+      this.syStudents.set(sy);
+      this.tyStudents.set(ty);
+      this.fyStudents.set(fy);
+
+      const total = sy.length + ty.length + fy.length;
+      this.stats.update((s) => ({
+        students_by_class: {
+          SY: sy.length,
+          TY: ty.length,
+          'Final Year': fy.length,
+          total
+        },
+        tests_by_status: s?.tests_by_status || { Upcoming: 0, Current: 0, Completed: 0, Published: 0, total: 0 }
+      }));
+    } catch (e) {
+      console.warn('Failed to load student rosters:', e);
+    }
   }
 
   handleLogout(): void {
@@ -818,13 +843,27 @@ export class AdminDashboardComponent implements OnInit {
 
   async onStudentFileSelected(event: any, className: string = 'SY'): Promise<void> {
     const file = event.target.files[0];
-    if (file) {
-      const res = await this.excelService.validateAndParseStudents(file);
-      if (res.valid) {
-        this.studentUploadMsg.set(`Validated ${res.data.length} student records for ${className}. Confirmed all-or-nothing roster replacement.`);
-      } else {
-        this.studentUploadMsg.set(`Validation errors: ${res.errors.join('; ')}`);
-      }
+    if (!file) return;
+
+    const res = await this.excelService.validateAndParseStudents(file);
+    if (!res.valid) {
+      this.studentUploadMsg.set(`Validation errors: ${res.errors.join('; ')}`);
+      return;
+    }
+
+    try {
+      this.studentUploadMsg.set(`Validated ${res.data.length} records locally. Uploading to database...`);
+      const serverRes = await this.adminService.uploadStudentExcel(file);
+      const inserted = serverRes?.inserted !== undefined ? serverRes.inserted : res.data.length;
+
+      await this.loadRosters();
+      const logs = await this.adminService.getAuditLogs();
+      this.auditLogs.set(logs);
+
+      this.studentUploadMsg.set(`Successfully imported ${inserted} student records into database for ${className}. Confirmed roster update.`);
+    } catch (err: any) {
+      const errMsg = err?.message || 'Server upload failed. Please try again.';
+      this.studentUploadMsg.set(`Upload failed: ${errMsg}`);
     }
   }
 

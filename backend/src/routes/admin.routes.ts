@@ -44,7 +44,7 @@ import {
   getResultByIdAdminHandler,
   overrideStudentScoreAdminHandler
 } from '../controllers/admin/attemptAndResultAdmin.controller';
-import { getAdminDashboardHandler } from '../controllers/admin/dashboardAdmin.controller';
+import { getAdminDashboardHandler, getAuditLogsAdminHandler } from '../controllers/admin/dashboardAdmin.controller';
 
 const router = Router();
 
@@ -58,6 +58,7 @@ router.use(requireAdminAuth);
 router.post('/auth/logout', logoutAdminHandler);
 router.get('/auth/me', getAdminMeHandler);
 router.get('/dashboard', getAdminDashboardHandler);
+router.get('/audit-logs', getAuditLogsAdminHandler);
 
 // STUDENT MANAGEMENT
 router.get('/students', getStudentsAdminHandler);
