@@ -12,7 +12,7 @@ import { AuthService } from '../../core/services/auth.service';
       <div class="container nav-content">
         <a routerLink="/" class="brand">
           <div class="brand-icon">
-            <img src="assets/cognify-logo.png" alt="Cognify Logo" class="cognify-brand-logo">
+            <img src="cognify-logo.png" alt="Cognify Logo" class="cognify-brand-logo">
           </div>
           <div>
             <span class="brand-name">COGNIFY</span>
