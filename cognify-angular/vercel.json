@@ -2,11 +2,11 @@
   "version": 2,
   "framework": "angular",
   "buildCommand": "npm run build",
-  "outputDirectory": "dist/cognify-angular",
+  "outputDirectory": "dist/cognify-angular/browser",
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://cognify-backend.onrender.com/api/$1"
+      "destination": "https://cognify-backend1.onrender.com/api/$1"
     },
     {
       "source": "/(.*)",
