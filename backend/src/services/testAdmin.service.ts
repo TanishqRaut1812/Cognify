@@ -1,19 +1,21 @@
 import { query, transaction } from '../db/pool';
-import { TestMetadataDto } from '../types/read.types';
-import { createAuditLog } from './auditLog.service';
 import { NotFoundError, ValidationError } from '../types/api.types';
+import { createAuditLog } from './auditLog.service';
 
-export interface CreateTestInput {
-  testNumber: string;
+export interface TestMetadataDto {
+  id: number;
+  testNumber: number;
   title: string;
-  className?: string;
   testDate: string;
-  startTime?: string;
-  finishTime?: string;
-  durationMinutes: number;
+  startTime: string;
+  finishTime: string;
   totalMarks: number;
-  status?: 'Upcoming' | 'Current' | 'Completed';
-  instructions?: string;
+  durationMinutes: number;
+  status: 'Upcoming' | 'Current' | 'Completed';
+  isPublished: boolean;
+  is_published?: number;
+  questionCount?: number;
+  attemptCount?: number;
 }
 
 export async function getAdminTests(): Promise<TestMetadataDto[]> {
@@ -22,169 +24,162 @@ export async function getAdminTests(): Promise<TestMetadataDto[]> {
       t.id,
       t.test_number AS "testNumber",
       t.test_name AS title,
-      'SY' AS "className",
-      t.test_date AS "testDate",
+      COALESCE(t.test_date, '2026-08-25') AS "testDate",
       t.start_time AS "startTime",
       t.finish_time AS "finishTime",
-      t.duration_minutes AS "durationMinutes",
       t.total_marks AS "totalMarks",
+      t.duration_minutes AS "durationMinutes",
       t.status,
       (t.is_published = 1) AS "isPublished",
-      CASE WHEN t.is_published = 1 THEN 'Published' ELSE 'Unpublished' END AS "resultStatus",
-      t.instructions
+      t.is_published,
+      (SELECT COUNT(*) FROM questions q WHERE q.test_id = t.id) AS "questionCount",
+      (SELECT COUNT(*) FROM student_attempts sa WHERE sa.test_id = t.id) AS "attemptCount"
     FROM tests t
     ORDER BY t.id ASC;
   `;
+
   const res = await query(sql);
-  return res.rows.map((row) => ({
-    ...row,
-    totalMarks: parseFloat(row.totalMarks) || 50,
-    durationMinutes: row.durationMinutes || 60,
-    isPublished: Boolean(row.isPublished),
-    resultStatus: row.isPublished ? 'Published' : 'Unpublished'
-  }));
+  return res.rows;
 }
 
-export async function createTestAdmin(input: CreateTestInput): Promise<TestMetadataDto> {
-  if (!input.testNumber || !input.title || !input.totalMarks || input.totalMarks <= 0) {
-    throw new ValidationError('Valid test number, title, and positive total marks are required');
-  }
-
-  // Check unique test_number
-  const existing = await query(`SELECT id FROM tests WHERE test_number = $1;`, [input.testNumber]);
-  if (existing.rows.length > 0) {
-    throw new ValidationError(`Test Number '${input.testNumber}' already exists`);
-  }
-
-  const sql = `
-    INSERT INTO tests (
-      test_number, test_name, test_date, start_time, finish_time,
-      duration_minutes, total_marks, status, is_published, instructions
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, $9)
-    RETURNING id;
-  `;
-
-  const res = await query(sql, [
-    input.testNumber,
-    input.title,
-    input.testDate || new Date().toISOString().split('T')[0],
-    input.startTime || '5:15 PM',
-    input.finishTime || '6:15 PM',
-    input.durationMinutes || 60,
-    input.totalMarks,
-    input.status || 'Upcoming',
-    input.instructions || ''
-  ]);
-
-  const newTestId = res.rows[0].id;
-
-  await createAuditLog({
-    action: 'CREATE_TEST',
-    testId: newTestId,
-    newValue: `Created test ${input.title} (${input.testNumber})`
-  });
-
-  return getAdminTestById(newTestId);
-}
-
-export async function getAdminTestById(testId: number): Promise<TestMetadataDto> {
+export async function getAdminTestById(id: number): Promise<TestMetadataDto> {
   const sql = `
     SELECT 
       t.id,
       t.test_number AS "testNumber",
       t.test_name AS title,
-      'SY' AS "className",
-      t.test_date AS "testDate",
+      COALESCE(t.test_date, '2026-08-25') AS "testDate",
       t.start_time AS "startTime",
       t.finish_time AS "finishTime",
-      t.duration_minutes AS "durationMinutes",
       t.total_marks AS "totalMarks",
+      t.duration_minutes AS "durationMinutes",
       t.status,
       (t.is_published = 1) AS "isPublished",
-      CASE WHEN t.is_published = 1 THEN 'Published' ELSE 'Unpublished' END AS "resultStatus",
-      t.instructions
+      t.is_published,
+      (SELECT COUNT(*) FROM questions q WHERE q.test_id = t.id) AS "questionCount",
+      (SELECT COUNT(*) FROM student_attempts sa WHERE sa.test_id = t.id) AS "attemptCount"
     FROM tests t
     WHERE t.id = $1;
   `;
-  const res = await query(sql, [testId]);
+
+  const res = await query(sql, [id]);
   if (res.rows.length === 0) {
-    throw new NotFoundError(`Test with ID ${testId} not found`);
+    throw new NotFoundError(`Test ID ${id} not found`);
   }
-  const row = res.rows[0];
-  return {
-    ...row,
-    totalMarks: parseFloat(row.totalMarks) || 50,
-    durationMinutes: row.durationMinutes || 60,
-    isPublished: Boolean(row.isPublished),
-    resultStatus: row.isPublished ? 'Published' : 'Unpublished'
-  };
+  return res.rows[0];
 }
 
-export async function updateTestAdmin(testId: number, input: Partial<CreateTestInput>): Promise<TestMetadataDto> {
-  const current = await getAdminTestById(testId);
-
-  if (input.testNumber && input.testNumber !== current.testNumber) {
-    const existing = await query(`SELECT id FROM tests WHERE test_number = $1 AND id != $2;`, [input.testNumber, testId]);
-    if (existing.rows.length > 0) {
-      throw new ValidationError(`Test Number '${input.testNumber}' is already in use`);
-    }
+export async function createTestAdmin(data: {
+  testNumber: number;
+  title: string;
+  testDate?: string;
+  startTime?: string;
+  finishTime?: string;
+  totalMarks?: number;
+  durationMinutes?: number;
+}): Promise<TestMetadataDto> {
+  if (!data.testNumber || !data.title) {
+    throw new ValidationError('Test number and title are required');
   }
 
   const sql = `
+    INSERT INTO tests (test_number, test_name, test_date, start_time, finish_time, total_marks, duration_minutes, status, is_published)
+    VALUES ($1, $2, COALESCE($3, '2026-08-25'), COALESCE($4, '10:00:00'), COALESCE($5, '11:00:00'), COALESCE($6, 50.0), COALESCE($7, 60), 'Upcoming', 0)
+    RETURNING id;
+  `;
+
+  const res = await query(sql, [
+    data.testNumber,
+    data.title.trim(),
+    data.testDate,
+    data.startTime,
+    data.finishTime,
+    data.totalMarks,
+    data.durationMinutes
+  ]);
+
+  const newId = res.rows[0].id;
+
+  await createAuditLog({
+    action: 'CREATE_TEST',
+    testId: newId,
+    newValue: `Created test #${data.testNumber} "${data.title}"`
+  });
+
+  return getAdminTestById(newId);
+}
+
+export async function updateTestAdmin(
+  id: number,
+  data: {
+    testNumber?: number;
+    title?: string;
+    testDate?: string;
+    startTime?: string;
+    finishTime?: string;
+    totalMarks?: number;
+    durationMinutes?: number;
+    status?: 'Upcoming' | 'Current' | 'Completed';
+    isPublished?: boolean;
+  }
+): Promise<TestMetadataDto> {
+  const current = await getAdminTestById(id);
+
+  const testNumber = data.testNumber !== undefined ? data.testNumber : current.testNumber;
+  const title = data.title !== undefined ? data.title.trim() : current.title;
+  const testDate = data.testDate !== undefined ? data.testDate : current.testDate;
+  const startTime = data.startTime !== undefined ? data.startTime : current.startTime;
+  const finishTime = data.finishTime !== undefined ? data.finishTime : current.finishTime;
+  const totalMarks = data.totalMarks !== undefined ? data.totalMarks : current.totalMarks;
+  const durationMinutes = data.durationMinutes !== undefined ? data.durationMinutes : current.durationMinutes;
+  const status = data.status !== undefined ? data.status : current.status;
+  const isPublished = data.isPublished !== undefined ? (data.isPublished ? 1 : 0) : current.is_published;
+
+  const sql = `
     UPDATE tests
-    SET 
-      test_number = COALESCE($1, test_number),
-      test_name = COALESCE($2, test_name),
-      test_date = COALESCE($3, test_date),
-      start_time = COALESCE($4, start_time),
-      finish_time = COALESCE($5, finish_time),
-      duration_minutes = COALESCE($6, duration_minutes),
-      total_marks = COALESCE($7, total_marks),
-      status = COALESCE($8, status),
-      instructions = COALESCE($9, instructions)
+    SET test_number = $1, test_name = $2, test_date = $3, start_time = $4, finish_time = $5,
+        total_marks = $6, duration_minutes = $7, status = $8, is_published = $9
     WHERE id = $10;
   `;
 
   await query(sql, [
-    input.testNumber || null,
-    input.title || null,
-    input.testDate || null,
-    input.startTime || null,
-    input.finishTime || null,
-    input.durationMinutes || null,
-    input.totalMarks || null,
-    input.status || null,
-    input.instructions !== undefined ? input.instructions : null,
-    testId
+    testNumber,
+    title,
+    testDate,
+    startTime,
+    finishTime,
+    totalMarks,
+    durationMinutes,
+    status,
+    isPublished,
+    id
   ]);
-
-  const updated = await getAdminTestById(testId);
 
   await createAuditLog({
     action: 'UPDATE_TEST',
-    testId,
-    previousValue: JSON.stringify(current),
-    newValue: JSON.stringify(updated)
+    testId: id,
+    newValue: `Updated test #${testNumber} "${title}"`
   });
 
-  return updated;
+  return getAdminTestById(id);
 }
 
-export async function deleteTestAdmin(testId: number): Promise<void> {
-  const test = await getAdminTestById(testId);
+export async function deleteTestAdmin(id: number): Promise<void> {
+  await getAdminTestById(id);
 
   await transaction(async (client) => {
-    await client.query(`DELETE FROM questions WHERE test_id = $1;`, [testId]);
-    await client.query(`DELETE FROM test_results WHERE test_id = $1;`, [testId]);
-    await client.query(`DELETE FROM student_attempts WHERE test_id = $1;`, [testId]);
-    await client.query(`DELETE FROM resources WHERE test_id = $1;`, [testId]);
-    await client.query(`DELETE FROM tests WHERE id = $1;`, [testId]);
+    await client.query('DELETE FROM student_answers WHERE attempt_id IN (SELECT id FROM student_attempts WHERE test_id = $1);', [id]);
+    await client.query('DELETE FROM student_attempts WHERE test_id = $1;', [id]);
+    await client.query('DELETE FROM test_results WHERE test_id = $1;', [id]);
+    await client.query('DELETE FROM attendance WHERE test_id = $1;', [id]);
+    await client.query('DELETE FROM questions WHERE test_id = $1;', [id]);
+    await client.query('DELETE FROM tests WHERE id = $1;', [id]);
 
     await createAuditLog(
       {
         action: 'DELETE_TEST',
-        testId,
-        newValue: `Deleted test ${test.title} (${test.testNumber}) and associated records`
+        testId: id,
+        newValue: `Deleted test ID ${id} and all related questions, attempts, and results`
       },
       client
     );
@@ -208,7 +203,6 @@ export async function publishResultsAdmin(testId: number): Promise<TestMetadataD
     `UPDATE tests SET is_published = 1 WHERE id = $1;`,
     [testId]
   );
-  await query(`UPDATE test_results SET published = 1 WHERE test_id = $1;`, [testId]);
 
   await createAuditLog({
     action: 'PUBLISH_RESULTS',
@@ -224,7 +218,6 @@ export async function unpublishResultsAdmin(testId: number): Promise<TestMetadat
     `UPDATE tests SET is_published = 0 WHERE id = $1;`,
     [testId]
   );
-  await query(`UPDATE test_results SET published = 0 WHERE test_id = $1;`, [testId]);
 
   await createAuditLog({
     action: 'UNPUBLISH_RESULTS',
