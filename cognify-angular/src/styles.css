@@ -604,20 +604,47 @@ a:hover {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 6px 12px;
+    padding: 6px 14px;
     border-radius: var(--radius-sm);
     font-size: 13px;
-    font-weight: 500;
+    font-weight: 600;
     background: rgba(255, 255, 255, 0.06);
     color: var(--text-primary);
     border: 1px solid var(--border-subtle);
     text-decoration: none;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    outline: none;
+}
+
+.resource-pill:hover:not(.disabled) {
+    background: rgba(56, 189, 248, 0.12);
+    border-color: var(--accent-sky);
+    color: var(--accent-sky);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(56, 189, 248, 0.2);
+}
+
+.resource-pill:active:not(.disabled) {
+    transform: translateY(0);
+    box-shadow: 0 2px 6px rgba(56, 189, 248, 0.15);
+    background: rgba(56, 189, 248, 0.2);
+}
+
+.resource-pill:focus-visible:not(.disabled) {
+    outline: 2px solid var(--accent-sky);
+    outline-offset: 2px;
 }
 
 .resource-pill.disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+    opacity: 0.45;
+    cursor: not-allowed !important;
     color: var(--text-muted);
+    background: rgba(255, 255, 255, 0.02);
+    border-color: rgba(255, 255, 255, 0.05);
+    box-shadow: none !important;
+    transform: none !important;
 }
 
 /* Semester Plan Timeline */

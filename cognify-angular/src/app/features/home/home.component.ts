@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { LeaderboardService, TimelineData, CurrentPrepData } from '../../core/services/leaderboard.service';
+import { ResourceService } from '../../core/services/resource.service';
 import { StudentScore } from '../../core/models/cognify.models';
 
 @Component({
@@ -206,6 +207,7 @@ import { StudentScore } from '../../core/models/cognify.models';
 })
 export class HomeComponent implements OnInit {
   private leaderboardService = inject(LeaderboardService);
+  private resourceService = inject(ResourceService);
   private router = inject(Router);
 
   activeTab = signal<'SY' | 'TY' | 'Final Year'>('SY');
@@ -215,6 +217,7 @@ export class HomeComponent implements OnInit {
   currentPrep = signal<CurrentPrepData | null>(null);
 
   searchRegNo = '';
+  homeErrorMessage: string | null = null;
 
   async ngOnInit(): Promise<void> {
     const r = await this.leaderboardService.getTop10Rankings();
@@ -237,10 +240,24 @@ export class HomeComponent implements OnInit {
     return '';
   }
 
-  handleDownload(event: Event, resource: any): void {
+  async handleDownload(event: Event, resource: any): Promise<void> {
+    event.preventDefault();
+    this.homeErrorMessage = null;
     if (!resource.accessible) {
-      event.preventDefault();
-      alert('Question Paper and Answer Key are inaccessible until the test has passed its Finish Time AND is marked Completed.');
+      this.homeErrorMessage = 'Question Paper and Answer Key are inaccessible until the test has passed its Finish Time AND is marked Completed.';
+      return;
+    }
+
+    try {
+      const res = await this.resourceService.getDownloadUrl(resource.test_id || 3, resource.type || 'notes');
+      if (res && res.downloadUrl) {
+        window.open(res.downloadUrl, '_blank');
+      } else {
+        this.homeErrorMessage = 'Failed to generate download link. Please try again.';
+      }
+    } catch (err: any) {
+      const msg = err?.error?.error?.message || err?.message || 'Resource not uploaded yet.';
+      this.homeErrorMessage = msg;
     }
   }
 

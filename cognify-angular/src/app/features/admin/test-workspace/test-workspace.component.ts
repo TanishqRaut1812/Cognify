@@ -280,9 +280,10 @@ import { AttendanceRecord, AuditLog, Resource, SyllabusCategory } from '../../..
                 @for (s of testSyllabus(); track s.id) {
                   <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
                     <div>
-                      <div style="font-weight: 700;">{{ s.category_name }}</div>
-                      <div style="font-size: 12px; color: var(--text-muted);">{{ s.topics_json }}</div>
+                      <div style="font-weight: 700;">{{ s.category_name || s.categoryName || s.title }}</div>
+                      <div style="font-size: 12px; color: var(--text-muted);">{{ s.topics_json || (s.topics ? s.topics.join(', ') : '') }}</div>
                     </div>
+                    <button type="button" class="btn btn-secondary btn-sm" (click)="s.id ? deleteSyllabusCat(s.id) : null" style="color: var(--accent-rose);">Delete</button>
                   </div>
                 } @empty {
                   <div style="font-size: 13px; color: var(--text-muted); padding: 8px 0;">No syllabus categories added yet.</div>
@@ -655,6 +656,18 @@ export class TestWorkspaceComponent implements OnInit {
       this.testSyllabus.set(syl);
     } catch (err: any) {
       alert(`Failed to add syllabus: ${err?.message || 'Server error'}`);
+    }
+  }
+
+  async deleteSyllabusCat(id: number): Promise<void> {
+    if (confirm('Delete this syllabus category?')) {
+      try {
+        await this.adminService.deleteSyllabusCategory(id);
+        const syl = await this.adminService.getTestSyllabus(this.testId);
+        this.testSyllabus.set(syl);
+      } catch (err: any) {
+        alert(`Failed to delete syllabus category: ${err?.message || 'Server error'}`);
+      }
     }
   }
 

@@ -71,6 +71,10 @@ export class AdminService {
     return await firstValueFrom(this.api.post<any>(`/admin/tests/${testId}/syllabus`, { categoryName, topics }));
   }
 
+  async deleteSyllabusCategory(syllabusId: number): Promise<any> {
+    return await firstValueFrom(this.api.delete<any>(`/admin/syllabus/${syllabusId}`));
+  }
+
   async getDashboardStats(): Promise<DashboardStats> {
     try {
       const res = await firstValueFrom(this.api.get<any>('/admin/dashboard'));

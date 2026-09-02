@@ -31,7 +31,8 @@ import {
 } from '../controllers/admin/questionAdmin.controller';
 import {
   uploadQuestionPaperHandler,
-  uploadAnswerKeyHandler
+  uploadAnswerKeyHandler,
+  uploadResourceHandler
 } from '../controllers/admin/fileStorageAdmin.controller';
 import {
   getTestAttendanceAdminHandler,
@@ -45,6 +46,11 @@ import {
   overrideStudentScoreAdminHandler
 } from '../controllers/admin/attemptAndResultAdmin.controller';
 import { getAdminDashboardHandler, getAuditLogsAdminHandler } from '../controllers/admin/dashboardAdmin.controller';
+import {
+  addSyllabusCategoryHandler,
+  deleteSyllabusCategoryHandler,
+  updateSyllabusCategoryHandler
+} from '../controllers/admin/syllabusAdmin.controller';
 
 const router = Router();
 
@@ -86,9 +92,10 @@ router.put('/questions/:id', updateQuestionAdminHandler);
 router.delete('/questions/:id', deleteQuestionAdminHandler);
 router.post('/tests/:testId/questions/import', uploadSingleFile, importQuestionsExcelHandler);
 
-// QUESTION PAPERS & ANSWER KEYS
+// QUESTION PAPERS & ANSWER KEYS & RESOURCES
 router.post('/tests/:testId/question-paper', uploadSingleFile, uploadQuestionPaperHandler);
 router.post('/tests/:testId/answer-key', uploadSingleFile, uploadAnswerKeyHandler);
+router.post('/tests/:testId/resources', uploadSingleFile, uploadResourceHandler);
 
 // ATTENDANCE MANAGEMENT
 router.get('/tests/:testId/attendance', getTestAttendanceAdminHandler);
@@ -102,5 +109,10 @@ router.get('/attempts/:attemptId', getAttemptByIdAdminHandler);
 router.get('/tests/:testId/results', getTestResultsAdminHandler);
 router.get('/results/:id', getResultByIdAdminHandler);
 router.put('/results/:id', overrideStudentScoreAdminHandler);
+
+// SYLLABUS MANAGEMENT
+router.post('/tests/:testId/syllabus', addSyllabusCategoryHandler);
+router.delete('/syllabus/:id', deleteSyllabusCategoryHandler);
+router.put('/syllabus/:id', updateSyllabusCategoryHandler);
 
 export default router;

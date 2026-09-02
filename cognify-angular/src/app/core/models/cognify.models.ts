@@ -222,6 +222,8 @@ export interface SyllabusCategory {
   test_id?: number;
   categoryName?: string;
   category_name?: string;
+  title?: string;
+  content?: string;
   topics?: string[];
   topics_json?: string[] | string;
   displayOrder?: number;

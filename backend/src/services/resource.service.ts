@@ -1,5 +1,9 @@
+import { GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { query } from '../db/pool';
+import { s3Client } from './storage.service';
 import { ResourceDto } from '../types/read.types';
+import { AppError } from '../types/api.types';
 
 export async function getResources(
   classCode?: string,
@@ -8,11 +12,6 @@ export async function getResources(
 ): Promise<ResourceDto[]> {
   const conditions: string[] = [];
   const params: any[] = [];
-
-  if (classCode) {
-    params.push(classCode);
-    conditions.push(`c.code = $${params.length}`);
-  }
 
   if (testId) {
     params.push(testId);
@@ -30,16 +29,13 @@ export async function getResources(
     SELECT 
       r.id,
       r.test_id AS "testId",
-      r.class_id AS "classId",
-      c.code AS "className",
       r.resource_type AS "resourceType",
       r.title,
-      r.visibility,
-      r.created_at AS "createdAt"
+      r.file_path AS "filePath",
+      r.updated_at AS "createdAt"
     FROM resources r
-    LEFT JOIN classes c ON r.class_id = c.id
     ${whereClause}
-    ORDER BY r.created_at DESC, r.id DESC;
+    ORDER BY r.id DESC;
   `;
 
   const res = await query(sql, params);
@@ -47,11 +43,100 @@ export async function getResources(
   return res.rows.map((row) => ({
     id: row.id,
     testId: row.testId,
-    classId: row.classId,
-    className: row.className,
+    classId: undefined,
+    className: undefined,
     resourceType: row.resourceType,
     title: row.title,
-    visibility: row.visibility,
+    visibility: 'public',
+    filePath: row.filePath,
     createdAt: row.createdAt
   }));
+}
+
+export async function getTestResourceStatus(testId: number): Promise<any> {
+  // Fetch test info
+  const testRes = await query("SELECT id, status, is_published FROM tests WHERE id = $1;", [testId]);
+  if (testRes.rows.length === 0) {
+    throw new AppError('Test not found', 404, 'NOT_FOUND');
+  }
+  const test = testRes.rows[0];
+  const isCompleted = test.status === 'Completed';
+
+  // Fetch resources for test
+  const resList = await query("SELECT id, resource_type, title, file_path FROM resources WHERE test_id = $1;", [testId]);
+
+  const map: Record<string, { exists: boolean; resourceId?: number; title?: string; isLocked: boolean }> = {
+    notes: { exists: false, isLocked: false },
+    practice: { exists: false, isLocked: false },
+    question_paper: { exists: false, isLocked: !isCompleted },
+    answer_key: { exists: false, isLocked: !isCompleted }
+  };
+
+  for (const r of resList.rows) {
+    const rType = r.resource_type;
+    if (map[rType]) {
+      map[rType].exists = true;
+      map[rType].resourceId = r.id;
+      map[rType].title = r.title;
+    }
+  }
+
+  return {
+    testId,
+    testStatus: test.status,
+    isCompleted,
+    resources: map
+  };
+}
+
+export async function getResourceDownloadUrl(testId: number, resourceType: string): Promise<{ downloadUrl: string; title: string; resourceType: string }> {
+  // 1. Verify test & access rules
+  const testRes = await query("SELECT id, test_number, test_name, status, is_published FROM tests WHERE id = $1;", [testId]);
+  if (testRes.rows.length === 0) {
+    throw new AppError('Test not found', 404, 'NOT_FOUND');
+  }
+  const test = testRes.rows[0];
+
+  const typeNorm = resourceType.toLowerCase().trim();
+
+  // Access control rule: question_paper and answer_key locked until test is Completed
+  if ((typeNorm === 'question_paper' || typeNorm === 'answer_key') && test.status !== 'Completed') {
+    throw new AppError(
+      `${typeNorm === 'question_paper' ? 'Question Paper' : 'Answer Key'} is inaccessible until the test has passed its Finish Time AND is marked Completed.`,
+      403,
+      'LOCKED_RESOURCE'
+    );
+  }
+
+  // 2. Fetch resource entry
+  const res = await query("SELECT id, title, file_path FROM resources WHERE test_id = $1 AND resource_type = $2 LIMIT 1;", [testId, typeNorm]);
+  if (res.rows.length === 0) {
+    throw new AppError(`No ${typeNorm.replace('_', ' ')} resource uploaded for this test.`, 404, 'RESOURCE_NOT_FOUND');
+  }
+
+  const resource = res.rows[0];
+  const s3Key: string = resource.file_path;
+
+  // 3. Determine bucket
+  let bucketName = 'resources';
+  if (s3Key.startsWith('question-papers/')) {
+    bucketName = 'question-papers';
+  } else if (s3Key.startsWith('answer-keys/')) {
+    bucketName = 'answer-keys';
+  }
+
+  // 4. Generate short-lived signed URL (15 minutes = 900 seconds)
+  const command = new GetObjectCommand({
+    Bucket: bucketName,
+    Key: s3Key,
+    ResponseContentDisposition: `inline; filename="${encodeURIComponent(resource.title || 'document')}.pdf"`
+  });
+
+  const downloadUrl = await getSignedUrl(s3Client, command, { expiresIn: 900 });
+
+  return {
+    downloadUrl,
+    title: resource.title,
+    resourceType: typeNorm
+  };
 }
