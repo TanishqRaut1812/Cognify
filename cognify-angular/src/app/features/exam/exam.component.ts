@@ -248,11 +248,22 @@ export class ExamComponent implements OnInit {
       }
     }
 
-    // Attempt automatic session recovery on page load / refresh
+    // Attempt automatic session recovery on page load / refresh ONLY if session matches targetTestId
     const session = this.attemptSession.loadSession();
     if (session) {
+      if (this.targetTestId > 0 && Number(session.testId) !== Number(this.targetTestId)) {
+        console.info(`Clearing session for test ${session.testId} because target URL testId is ${this.targetTestId}`);
+        this.attemptSession.clearSession();
+        this.examService.activeExam.set(null);
+        return;
+      }
+
       this.isLoading.set(true);
-      await this.examService.recoverSession(session);
+      const recovered = await this.examService.recoverSession(session, this.targetTestId);
+      if (!recovered) {
+        this.attemptSession.clearSession();
+        this.examService.activeExam.set(null);
+      }
       this.isLoading.set(false);
     }
   }

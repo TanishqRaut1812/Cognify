@@ -78,17 +78,52 @@ export class ExamService {
     }
   }
 
-  async recoverSession(session?: StoredAttemptSession | null): Promise<ActiveExamState | null> {
+  async recoverSession(session?: StoredAttemptSession | null, targetTestId?: number): Promise<ActiveExamState | null> {
     const s = session || this.attemptSession.loadSession();
     if (!s || !s.attemptId || !s.attemptToken) {
+      this.attemptSession.clearSession();
+      this.activeExam.set(null);
+      return null;
+    }
+
+    // Validate matching testId if targetTestId is specified
+    if (targetTestId && targetTestId > 0 && Number(s.testId) !== Number(targetTestId)) {
+      console.info(`Stored session testId (${s.testId}) does not match targetTestId (${targetTestId}). Clearing stale session.`);
+      this.attemptSession.clearSession();
+      this.activeExam.set(null);
       return null;
     }
 
     try {
-      // 1. Fetch attempt details from server
+      // 1. Fetch server-authoritative attempt details using attemptId
       const attempt = await firstValueFrom(
         this.api.get<StudentAttemptDetails>(`/student/attempts/${s.attemptId}`)
       );
+
+      // Validate server attempt testId matches session testId
+      if (attempt.testId && s.testId && Number(attempt.testId) !== Number(s.testId)) {
+        this.attemptSession.clearSession();
+        this.activeExam.set(null);
+        return null;
+      }
+
+      // Validate server registrationNo matches session registrationNo if present
+      if (attempt.registrationNo && s.registrationNo && attempt.registrationNo.trim().toUpperCase() !== s.registrationNo.trim().toUpperCase()) {
+        this.attemptSession.clearSession();
+        this.activeExam.set(null);
+        return null;
+      }
+
+      const isTerminated = attempt.attemptStatus === 'Terminated' || Boolean(attempt.cheatingFlag);
+      const isSubmitted = attempt.attemptStatus === 'Submitted';
+
+      // Rule 3: If attempt is SUBMITTED/COMPLETED on server, do not reopen exam workspace. Clear session.
+      if (isSubmitted) {
+        console.info(`Attempt ${s.attemptId} is already Submitted. Clearing session.`);
+        this.attemptSession.clearSession();
+        this.activeExam.set(null);
+        return null;
+      }
 
       // 2. Fetch questions from server
       const rawQuestions = await firstValueFrom(
@@ -111,22 +146,26 @@ export class ExamService {
         optionC: q.optionC || q.option_c,
         option_d: q.optionD || q.option_d,
         optionD: q.optionD || q.option_d,
-        marks: parseFloat(q.marks)
+        marks: parseFloat(q.marks) || 1.0
       }));
 
       // 3. Fetch saved answers from server
-      const savedAnswersList = await firstValueFrom(
-        this.api.get<{ answers: Array<{ questionId: number; selectedOption: string }> }>(
-          `/student/attempts/${s.attemptId}/answers`
-        )
-      );
-
-      const initialAnswers: { [qId: number]: 'A' | 'B' | 'C' | 'D' | '' } = {};
+      let initialAnswers: { [qId: number]: 'A' | 'B' | 'C' | 'D' | '' } = {};
       questions.forEach((q) => (initialAnswers[q.id] = ''));
-      if (savedAnswersList && savedAnswersList.answers) {
-        savedAnswersList.answers.forEach((ans) => {
-          initialAnswers[ans.questionId] = (ans.selectedOption as any) || '';
-        });
+      try {
+        const savedAnswersList = await firstValueFrom(
+          this.api.get<any>(`/student/attempts/${s.attemptId}/answers`)
+        );
+        const answersList = savedAnswersList?.answers || (savedAnswersList as any)?.data?.answers || (Array.isArray(savedAnswersList) ? savedAnswersList : []);
+        if (Array.isArray(answersList)) {
+          answersList.forEach((ans: any) => {
+            if (ans.questionId && ans.selectedOption) {
+              initialAnswers[ans.questionId] = ans.selectedOption as any;
+            }
+          });
+        }
+      } catch (ansErr) {
+        console.warn('Failed to fetch saved answers during recovery:', ansErr);
       }
 
       // Calculate server-authoritative remaining seconds
@@ -134,11 +173,8 @@ export class ExamService {
       const serverNowMs = new Date(attempt.currentServerTime || Date.now()).getTime();
       const remainingSeconds = Math.max(0, Math.floor((deadlineMs - serverNowMs) / 1000));
 
-      const isTerminated = attempt.attemptStatus === 'Terminated' || attempt.cheatingFlag;
-      const isSubmitted = attempt.attemptStatus === 'Submitted' || isTerminated;
-
       const studentProfile: Student = s.student || {
-        registration_no: s.registrationNo,
+        registration_no: s.registrationNo || attempt.registrationNo,
         name: s.studentName || 'Student',
         class_name: (s.className as any) || 'SY'
       };
@@ -146,8 +182,8 @@ export class ExamService {
       const newState: ActiveExamState = {
         student: studentProfile,
         attemptId: attempt.id,
-        testId: attempt.testId,
-        testName: s.testName || 'Cognify Online Examination',
+        testId: attempt.testId || s.testId,
+        testName: s.testName || `Test ${attempt.testId}`,
         testNumber: s.testNumber || `Test ${attempt.testId}`,
         durationMinutes: Math.round(remainingSeconds / 60),
         questions,
@@ -156,19 +192,20 @@ export class ExamService {
         remainingSeconds,
         violationCount: attempt.fullscreenViolationCount || 0,
         isLateAttempt: false,
-        isSubmitted,
+        isSubmitted: isSubmitted || isTerminated,
         isTerminated,
         showReviewModal: false
       };
 
       this.activeExam.set(newState);
-      if (!isSubmitted) {
+      if (!isSubmitted && !isTerminated) {
         this.startTimer();
       }
       return newState;
     } catch (e) {
       console.warn('Attempt session recovery failed:', e);
       this.attemptSession.clearSession();
+      this.activeExam.set(null);
       return null;
     }
   }
@@ -194,10 +231,16 @@ export class ExamService {
         targetId = await this.getActiveTestId();
       }
 
+      // ALWAYS clear any previous session when starting a new exam flow!
+      this.attemptSession.clearSession();
+      this.activeExam.set(null);
+
+      const regNo = student.registration_no || student.registrationNumber || '';
+
       const startRes = await firstValueFrom(
         this.api.post<any>(
           `/student/tests/${targetId}/start`,
-          { registrationNumber: student.registration_no || student.registrationNumber }
+          { registrationNumber: regNo }
         )
       );
 
@@ -212,7 +255,7 @@ export class ExamService {
       const session: StoredAttemptSession = {
         attemptId,
         testId: targetId,
-        registrationNo: student.registration_no || student.registrationNumber || '',
+        registrationNo: regNo,
         studentName: student.name || 'Student',
         className: (student.class_name || student.class || 'SY') as any,
         student,
@@ -225,8 +268,10 @@ export class ExamService {
       };
       this.attemptSession.saveSession(session);
 
-      return (await this.recoverSession(session))!;
+      return (await this.recoverSession(session, targetId))!;
     } catch (e: any) {
+      this.attemptSession.clearSession();
+      this.activeExam.set(null);
       throw new Error(e.message || 'Failed to start exam session');
     }
   }
