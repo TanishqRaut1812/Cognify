@@ -126,79 +126,7 @@ import { Test, DashboardStats, AuditLog, BackupRecord, AttendanceRecord, Student
             </form>
           </div>
 
-          <!-- TEST WORKSPACE DRAWER -->
-          @if (selectedWorkspaceTest(); as wsTest) {
-            <div class="card-box" style="border-color: var(--accent-primary); margin-bottom: 24px;">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                <div>
-                  <span class="timeline-tag tag-current">Workspace Active</span>
-                  <h2 style="font-size: 22px; margin-top: 4px;">{{ wsTest.test_number }}: {{ wsTest.test_name }}</h2>
-                </div>
-                <button type="button" class="btn btn-secondary btn-sm" (click)="selectedWorkspaceTest.set(null)">Close Workspace</button>
-              </div>
 
-              <!-- WORKSPACE SUB TABS -->
-              <div style="display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 8px; overflow-x: auto;">
-                <button type="button" class="ws-tab-btn" [class.active]="wsTab() === 'overview'" (click)="wsTab.set('overview')">Overview</button>
-                <button type="button" class="ws-tab-btn" [class.active]="wsTab() === 'questions'" (click)="wsTab.set('questions')">Questions & Versioning</button>
-                <button type="button" class="ws-tab-btn" [class.active]="wsTab() === 'attendance'" (click)="wsTab.set('attendance')">Attendance Override</button>
-                <button type="button" class="ws-tab-btn" [class.active]="wsTab() === 'publish'" (click)="wsTab.set('publish')">Results Publication</button>
-              </div>
-
-              @if (wsTab() === 'questions') {
-                <div>
-                  <h4 style="font-size: 16px; margin-bottom: 8px;">Question Bank & Version Management</h4>
-                  <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
-                    Editing questions creates a new question version (Version 2) to preserve historical attempt reproducibility.
-                  </p>
-                  <input type="file" (change)="onQuestionFileSelected($event)" accept=".xlsx">
-                  @if (qUploadMsg()) {
-                    <div style="margin-top: 12px; color: var(--accent-emerald); font-weight: 600;">{{ qUploadMsg() }}</div>
-                  }
-                </div>
-              }
-
-              @if (wsTab() === 'attendance') {
-                <div>
-                  <h4 style="font-size: 16px; margin-bottom: 12px;">Candidate Attendance Override</h4>
-                  <table class="ranking-table">
-                    <thead>
-                      <tr><th>Registration No</th><th>Name</th><th>Status</th><th>Late Attempt</th><th>Override</th></tr>
-                    </thead>
-                    <tbody>
-                      @for (att of attendanceList(); track att.registration_no) {
-                        <tr>
-                          <td style="font-family: monospace;">{{ att.registration_no }}</td>
-                          <td>{{ att.student_name }}</td>
-                          <td>
-                            <span class="timeline-tag" [ngClass]="att.status === 'Present' ? 'tag-completed' : 'tag-upcoming'">{{ att.status }}</span>
-                          </td>
-                          <td>{{ att.is_late_attempt ? 'Yes (Late)' : 'No' }}</td>
-                          <td>
-                            <button type="button" class="btn btn-secondary btn-sm" (click)="toggleAttendance(att)">
-                              Toggle to {{ att.status === 'Present' ? 'Absent' : 'Present' }}
-                            </button>
-                          </td>
-                        </tr>
-                      }
-                    </tbody>
-                  </table>
-                </div>
-              }
-
-              @if (wsTab() === 'publish') {
-                <div>
-                  <h4 style="font-size: 16px; margin-bottom: 8px;">Official Result Publication Control</h4>
-                  <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
-                    Publishing results makes candidate scores, percentage breakdowns, and official rankings public across dashboards.
-                  </p>
-                  <button type="button" class="btn btn-primary" (click)="publishResults(wsTest)">
-                    {{ wsTest.is_published ? 'Unpublish Results' : 'Publish Test Results' }}
-                  </button>
-                </div>
-              }
-            </div>
-          }
 
           <div class="card-box">
             <h3 style="font-size: 18px; margin-bottom: 16px;">Configured Test Series</h3>
@@ -762,32 +690,46 @@ export class AdminDashboardComponent implements OnInit {
 
   async createTest(): Promise<void> {
     if (this.newTest.test_number && this.newTest.test_name && this.newTest.test_date) {
-      const created: Test = {
-        id: Date.now(),
-        test_number: this.newTest.test_number,
-        test_name: this.newTest.test_name,
-        test_date: this.newTest.test_date,
-        total_marks: this.newTest.total_marks || 50,
-        status: (this.newTest.status as any) || 'Upcoming',
-        is_published: 0,
-        duration_minutes: this.newTest.duration_minutes || 60,
-        instructions: '',
-        start_time: '10:00 AM',
-        finish_time: '11:00 AM'
-      };
+      try {
+        const payload = {
+          testNumber: this.newTest.test_number,
+          title: this.newTest.test_name,
+          className: 'SY',
+          testDate: this.newTest.test_date,
+          startTime: '10:00 AM',
+          finishTime: '11:00 AM',
+          durationMinutes: Number(this.newTest.duration_minutes || 60),
+          totalMarks: Number(this.newTest.total_marks || 50),
+          status: this.newTest.status || 'Upcoming'
+        };
 
-      this.tests.set([...this.tests(), created]);
-      await this.adminService.logAction('CREATE_TEST', created.id, undefined, undefined, created.test_name);
-      alert('Test Series created successfully!');
-      this.newTest = { test_number: '', test_name: '', test_date: '', total_marks: 50, status: 'Upcoming', duration_minutes: 60 };
+        const created = await this.adminService.createTest(payload);
+        const newTestItem: Test = {
+          id: created.id,
+          test_number: created.testNumber || this.newTest.test_number,
+          test_name: created.title || this.newTest.test_name,
+          test_date: created.testDate || this.newTest.test_date,
+          total_marks: created.totalMarks || this.newTest.total_marks || 50,
+          status: created.status || 'Upcoming',
+          is_published: 0,
+          duration_minutes: created.durationMinutes || 60,
+          instructions: '',
+          start_time: '10:00 AM',
+          finish_time: '11:00 AM'
+        };
+
+        this.tests.set([...this.tests(), newTestItem]);
+        alert('Test Series created successfully in database!');
+        this.newTest = { test_number: '', test_name: '', test_date: '', total_marks: 50, status: 'Upcoming', duration_minutes: 60 };
+        this.router.navigate(['/admin/test', created.id]);
+      } catch (err: any) {
+        alert(`Failed to create test: ${err?.message || 'Server error'}`);
+      }
     }
   }
 
   async openWorkspace(test: Test): Promise<void> {
-    this.selectedWorkspaceTest.set(test);
-    this.wsTab.set('overview');
-    const att = await this.adminService.getAttendance(test.id);
-    this.attendanceList.set(att);
+    this.router.navigate(['/admin/test', test.id]);
   }
 
   async toggleAttendance(att: AttendanceRecord): Promise<void> {

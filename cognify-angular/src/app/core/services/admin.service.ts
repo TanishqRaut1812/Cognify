@@ -134,4 +134,81 @@ export class AdminService {
     };
     return b;
   }
+
+  // TEST MANAGEMENT API
+  async createTest(testData: any): Promise<any> {
+    return await firstValueFrom(this.api.post<any>('/admin/tests', testData));
+  }
+
+  async getTestById(testId: number): Promise<any> {
+    return await firstValueFrom(this.api.get<any>(`/admin/tests/${testId}`));
+  }
+
+  async updateTest(testId: number, testData: any): Promise<any> {
+    return await firstValueFrom(this.api.put<any>(`/admin/tests/${testId}`, testData));
+  }
+
+  async deleteTest(testId: number): Promise<any> {
+    return await firstValueFrom(this.api.delete<any>(`/admin/tests/${testId}`));
+  }
+
+  async publishTest(testId: number): Promise<any> {
+    return await firstValueFrom(this.api.post<any>(`/admin/tests/${testId}/publish`));
+  }
+
+  async unpublishTest(testId: number): Promise<any> {
+    return await firstValueFrom(this.api.post<any>(`/admin/tests/${testId}/unpublish`));
+  }
+
+  // QUESTION BANK API
+  async getQuestionsForTest(testId: number): Promise<any[]> {
+    try {
+      const res = await firstValueFrom(this.api.get<any[]>(`/admin/tests/${testId}/questions`));
+      return Array.isArray(res) ? res : [];
+    } catch (e) {
+      console.warn(`Failed to fetch questions for test ${testId}:`, e);
+      return [];
+    }
+  }
+
+  async createQuestion(testId: number, qData: any): Promise<any> {
+    return await firstValueFrom(this.api.post<any>(`/admin/tests/${testId}/questions`, qData));
+  }
+
+  async updateQuestion(questionId: number, qData: any): Promise<any> {
+    return await firstValueFrom(this.api.put<any>(`/admin/questions/${questionId}`, qData));
+  }
+
+  async deleteQuestion(questionId: number): Promise<any> {
+    return await firstValueFrom(this.api.delete<any>(`/admin/questions/${questionId}`));
+  }
+
+  // ATTEMPTS & RESULTS INSPECTION
+  async getAttemptsForTest(testId: number): Promise<any[]> {
+    try {
+      const res = await firstValueFrom(this.api.get<any[]>(`/admin/tests/${testId}/attempts`));
+      return Array.isArray(res) ? res : [];
+    } catch (e) {
+      console.warn(`Failed to fetch attempts for test ${testId}:`, e);
+      return [];
+    }
+  }
+
+  async getAttemptById(attemptId: number): Promise<any> {
+    return await firstValueFrom(this.api.get<any>(`/admin/attempts/${attemptId}`));
+  }
+
+  async getResultsForTest(testId: number): Promise<any[]> {
+    try {
+      const res = await firstValueFrom(this.api.get<any[]>(`/admin/tests/${testId}/results`));
+      return Array.isArray(res) ? res : [];
+    } catch (e) {
+      console.warn(`Failed to fetch results for test ${testId}:`, e);
+      return [];
+    }
+  }
+
+  async overrideResultScore(resultId: number, marksObtained: number): Promise<any> {
+    return await firstValueFrom(this.api.put<any>(`/admin/results/${resultId}`, { marksObtained }));
+  }
 }

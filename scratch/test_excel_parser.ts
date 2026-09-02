@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx';
+import * as XLSX from '../cognify-angular/node_modules/xlsx';
 
 // Implementation of ExcelService validation for test environment
 async function validateAndParseQuestionsFrontend(buffer: Buffer): Promise<{ valid: boolean; data: any[]; errors: string[] }> {
@@ -91,8 +91,13 @@ async function validateAndParseQuestionsFrontend(buffer: Buffer): Promise<{ vali
 
     let correct = String(row[correctKey] || '').trim().toUpperCase();
     if (correct.length > 1) {
-      const match = correct.match(/^[A-D]/i);
-      if (match) correct = match[0].toUpperCase();
+      const startMatch = correct.match(/^[A-D]\b/i) || correct.match(/^[A-D][\s.\-_)]/i);
+      if (startMatch) {
+        correct = startMatch[0][0].toUpperCase();
+      } else {
+        const optMatch = correct.match(/(?:OPTION|OPT)[\s_]*([A-D])\b/i) || correct.match(/\b([A-D])\b/i);
+        if (optMatch) correct = optMatch[1].toUpperCase();
+      }
     }
 
     const rawMarks = marksKey ? row[marksKey] : undefined;
