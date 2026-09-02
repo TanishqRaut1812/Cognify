@@ -15,30 +15,30 @@ import { AuthService } from '../../core/services/auth.service';
             <img src="cognify-logo.png" alt="Cognify Logo" class="cognify-brand-logo">
           </div>
           <div>
-            <span class="brand-name">COGNIFY</span>
-            <span class="brand-sub">ITSA Leaderboard</span>
+            <span class="brand-name">Cognify</span>
+            <span class="brand-sub">ITSA MAD Program</span>
           </div>
         </a>
 
         <nav class="desktop-nav">
           <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}" class="nav-link">Home</a>
           <a routerLink="/rankings" routerLinkActive="active" class="nav-link">Rankings</a>
-          <a routerLink="/tests" routerLinkActive="active" class="nav-link">Test Archive</a>
+          <a routerLink="/tests" routerLinkActive="active" class="nav-link">Tests</a>
           <a routerLink="/plan" routerLinkActive="active" class="nav-link">Semester Plan</a>
 
           @if (authService.isAdmin()) {
             <a routerLink="/admin" routerLinkActive="active" class="nav-link admin-btn">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="M14 9h7"/>
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
               </svg>
               Admin Dashboard
             </a>
           } @else {
             <button type="button" class="nav-link admin-btn" (click)="openAdminModal.emit()">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
               </svg>
-              Admin Login
+              Admin
             </button>
           }
         </nav>

@@ -15,22 +15,22 @@ import { StudentScore } from '../../core/models/cognify.models';
       <div class="hero-card">
         <div class="hero-badge">
           <span class="pulse-dot"></span>
-          <span>Semester 2026 Active Series</span>
+          <span>Official ITSA Platform</span>
         </div>
-        <h1 class="hero-title">COGNIFY 2026</h1>
-        <div class="hero-subtitle">ITSA Official Aptitude & Mental Ability Assessment Portal</div>
-        <div class="hero-tagline">Track Performance. Master Aptitude. Elevate Rankings.</div>
+        <h1 class="hero-title">Cognify</h1>
+        <h2 class="hero-subtitle">ITSA Mental Ability Development Program</h2>
+        <p class="hero-tagline">Sharpen Your Thinking.</p>
         <p class="hero-desc">
-          Official competition platform evaluating quantitative aptitude, logical reasoning, and analytical problem-solving across SY, TY, and Final Year students.
+          The central portal for student test schedules, syllabus, practice questions, performance rankings, and official test keys across SY, TY, and Final Year.
         </p>
         <div class="hero-actions">
           <a routerLink="/rankings" class="btn btn-primary">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2z"/></svg>
-            View Full Leaderboard
+            View Rankings
           </a>
-          <a routerLink="/exam" class="btn btn-secondary">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-            Take Online Exam
+          <a routerLink="/plan" class="btn btn-secondary">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
+            Semester Plan
           </a>
         </div>
       </div>
@@ -41,16 +41,16 @@ import { StudentScore } from '../../core/models/cognify.models';
           <div>
             <h2 class="section-title">
               <svg class="accent-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2z"/></svg>
-              Top 10 Cognify Leaderboard
+              Current Class Leaderboards
             </h2>
-            <p class="section-sub">Highest performing candidates across completed assessments</p>
+            <p class="section-sub">Top 10 rankings per class based on Cognify Score</p>
           </div>
           <span class="timestamp-badge">Updated: {{ lastUpdated() || 'Live' }}</span>
         </div>
 
         <div class="class-segmented-control">
-          <button type="button" class="segmented-btn" [class.active]="activeTab() === 'SY'" (click)="activeTab.set('SY')">SY (Second Year)</button>
-          <button type="button" class="segmented-btn" [class.active]="activeTab() === 'TY'" (click)="activeTab.set('TY')">TY (Third Year)</button>
+          <button type="button" class="segmented-btn" [class.active]="activeTab() === 'SY'" (click)="activeTab.set('SY')">SY</button>
+          <button type="button" class="segmented-btn" [class.active]="activeTab() === 'TY'" (click)="activeTab.set('TY')">TY</button>
           <button type="button" class="segmented-btn" [class.active]="activeTab() === 'Final Year'" (click)="activeTab.set('Final Year')">Final Year</button>
         </div>
 
@@ -187,17 +187,17 @@ import { StudentScore } from '../../core/models/cognify.models';
         <div class="section-header">
           <div>
             <h2 class="section-title">
-              <svg class="accent-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" x2="16.65" y1="21" y2="16.65"/></svg>
-              Student Scorecard Search
+              <svg class="accent-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>
+              My Student Scorecard & Results
             </h2>
-            <p class="section-sub">Look up individual performance report by Registration Number</p>
+            <p class="section-sub">Enter your registration number to view your published test scores, percentages, and Cognify Score</p>
           </div>
         </div>
 
         <div class="prep-container">
           <form (ngSubmit)="searchStudent()" style="display: flex; gap: 12px; flex-wrap: wrap;">
-            <input type="text" [(ngModel)]="searchRegNo" name="searchRegNo" placeholder="Enter Registration Number (e.g. REG2026SY001)" style="flex: 1; min-width: 220px; font-family: monospace;" required>
-            <button type="submit" class="btn btn-primary">Search Performance</button>
+            <input type="text" [(ngModel)]="searchRegNo" name="searchRegNo" placeholder="Enter Registration Number (e.g. REG101)" style="flex: 1; min-width: 220px; font-family: monospace;" required>
+            <button type="submit" class="btn btn-primary">Check Published Results</button>
           </form>
         </div>
       </div>
