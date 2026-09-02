@@ -32,15 +32,17 @@ export class LeaderboardService {
       try {
         const res = await firstValueFrom(this.api.get<any[]>('/leaderboard', { class: cName }));
         if (res && Array.isArray(res)) {
-          grouped[cName] = res.map((r) => ({
-            registration_no: r.registrationNo || r.reg || '',
+          const mapped = res.map((r) => ({
+            registration_no: r.registrationNo || r.registrationNumber || r.reg || '',
             student_name: r.name || r.studentName || 'Student',
-            roll_no: r.rollNo || '--',
-            cognify_score: r.overallPercentage !== undefined ? r.overallPercentage : r.pct,
-            completed_tests_count: r.completedTestsCount || 1,
+            roll_no: r.rollNo || r.rollNumber || '--',
+            cognify_score: r.overallPercentage !== undefined ? r.overallPercentage : (r.cognifyScore !== undefined ? r.cognifyScore : r.pct),
+            completed_tests_count: r.completedTestsCount !== undefined ? r.completedTestsCount : 0,
             rank: r.rank,
             class_name: cName
           }));
+          // Slice top 10 for homepage preview while preserving pre-calculated competition ranks
+          grouped[cName] = mapped.slice(0, 10);
         }
       } catch (e) {
         console.warn(`Failed to fetch leaderboard for class ${cName}:`, e);
@@ -54,14 +56,15 @@ export class LeaderboardService {
       const res = await firstValueFrom(this.api.get<any[]>('/leaderboard', { class: className }));
       if (res && Array.isArray(res)) {
         return res.map((r) => ({
-          registration_no: r.registrationNo || r.reg || '',
+          registration_no: r.registrationNo || r.registrationNumber || r.reg || '',
           student_name: r.name || r.studentName || 'Student',
-          roll_no: r.rollNo || '--',
-          cognify_score: r.overallPercentage !== undefined ? r.overallPercentage : r.pct,
-          completed_tests_count: r.completedTestsCount || 1,
+          roll_no: r.rollNo || r.rollNumber || '--',
+          cognify_score: r.overallPercentage !== undefined ? r.overallPercentage : (r.cognifyScore !== undefined ? r.cognifyScore : r.pct),
+          completed_tests_count: r.completedTestsCount !== undefined ? r.completedTestsCount : 0,
           rank: r.rank,
           class_name: className
         }));
+        // Dedicated Rankings page remains complete and untruncated
       }
     } catch (e) {
       console.warn(`Failed to fetch full rankings for ${className}:`, e);
