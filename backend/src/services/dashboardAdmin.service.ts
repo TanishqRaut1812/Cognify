@@ -31,7 +31,7 @@ export async function getAdminDashboardStats(): Promise<AdminDashboardStatsDto> 
       COUNT(*) AS total,
       COUNT(*) FILTER (WHERE status = 'Current') AS active_count,
       COUNT(*) FILTER (WHERE status = 'Completed') AS completed_count,
-      COUNT(*) FILTER (WHERE result_status = 'Published') AS published_count
+      COUNT(*) FILTER (WHERE is_published = 1) AS published_count
     FROM tests;
   `);
 

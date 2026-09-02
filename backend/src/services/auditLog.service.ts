@@ -20,27 +20,19 @@ export async function createAuditLog(
   const sql = `
     INSERT INTO audit_logs (
       action,
-      entity_type,
-      entity_id,
-      details,
-      admin_identifier,
       test_id,
       registration_no,
       previous_value,
       new_value
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);
+    ) VALUES ($1, $2, $3, $4, $5);
   `;
 
   const params = [
     options.action,
-    options.entityType || null,
-    options.entityId ? String(options.entityId) : null,
-    options.details || null,
-    options.adminIdentifier || 'Admin',
     options.testId || null,
     options.registrationNo || null,
     options.previousValue || null,
-    options.newValue || null
+    options.newValue || options.details || null
   ];
 
   if (client) {
@@ -52,7 +44,7 @@ export async function createAuditLog(
 
 export async function getAuditLogsAdmin(limit = 100): Promise<any[]> {
   const res = await query(
-    `SELECT id, action, entity_type AS "entityType", entity_id AS "entityId", details, admin_identifier AS "adminIdentifier", registration_no AS "registrationNo", created_at AS "createdAt", previous_value AS "previous_value", new_value AS "new_value"
+    `SELECT id, timestamp, action, test_id, registration_no, previous_value, new_value
      FROM audit_logs
      ORDER BY id DESC
      LIMIT $1;`,
@@ -60,10 +52,11 @@ export async function getAuditLogsAdmin(limit = 100): Promise<any[]> {
   );
   return res.rows.map((r) => ({
     id: r.id,
-    timestamp: r.createdAt ? new Date(r.createdAt).toISOString() : new Date().toISOString(),
+    timestamp: r.timestamp ? new Date(r.timestamp).toISOString() : new Date().toISOString(),
     action: r.action,
+    test_id: r.test_id,
+    registration_no: r.registration_no,
     previous_value: r.previous_value || '',
-    new_value: r.new_value || r.details || ''
+    new_value: r.new_value || ''
   }));
 }
-

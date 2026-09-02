@@ -14,7 +14,7 @@ export async function getStudentsAdminHandler(req: Request, res: Response, next:
   try {
     const classCode = req.query.class ? String(req.query.class) : undefined;
     const search = req.query.search ? String(req.query.search) : undefined;
-    const students = await getStudentsAdmin(classCode, search);
+    const students = await getStudentsAdmin(classCode);
     sendSuccess(res, students);
   } catch (err) {
     next(err);

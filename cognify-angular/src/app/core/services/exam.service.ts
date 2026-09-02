@@ -195,26 +195,33 @@ export class ExamService {
       }
 
       const startRes = await firstValueFrom(
-        this.api.post<{ attempt: StudentAttemptDetails; attemptToken: string }>(
+        this.api.post<any>(
           `/student/tests/${targetId}/start`,
-          { registrationNumber: student.registration_no }
+          { registrationNumber: student.registration_no || student.registrationNumber }
         )
       );
 
-      const attempt = startRes.attempt;
+      const attemptId = startRes.attemptId || (startRes.attempt && startRes.attempt.id);
       const token = startRes.attemptToken;
+      const startedAt = startRes.startedAt || (startRes.attempt && startRes.attempt.startedAt) || new Date().toISOString();
+      const deadline = startRes.deadline || (startRes.attempt && startRes.attempt.deadline);
+      const status = startRes.attemptStatus || (startRes.attempt && startRes.attempt.attemptStatus) || 'In Progress';
+      const testName = (startRes.test && startRes.test.title) || `Test ${targetId}`;
+      const testNumber = (startRes.test && startRes.test.testNumber) || `Test ${targetId}`;
 
       const session: StoredAttemptSession = {
-        attemptId: attempt.id,
-        testId: attempt.testId,
-        registrationNo: student.registration_no,
-        studentName: student.name,
-        className: student.class_name,
+        attemptId,
+        testId: targetId,
+        registrationNo: student.registration_no || student.registrationNumber || '',
+        studentName: student.name || 'Student',
+        className: (student.class_name || student.class || 'SY') as any,
         student,
         attemptToken: token,
-        startedAt: attempt.startedAt,
-        deadline: attempt.deadline,
-        status: attempt.attemptStatus
+        testName,
+        testNumber,
+        startedAt,
+        deadline,
+        status
       };
       this.attemptSession.saveSession(session);
 

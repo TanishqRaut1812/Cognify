@@ -7,7 +7,7 @@ import { ValidationError } from '../types/api.types';
 export interface AttendanceAdminDto {
   id?: number;
   testId: number;
-  studentId: number;
+  studentId: number | string;
   registrationNo: string;
   studentName: string;
   className: string;
@@ -52,7 +52,7 @@ export async function getTestAttendanceAdmin(testId: number): Promise<Attendance
 
 export async function updateStudentAttendanceAdmin(
   testId: number,
-  studentId: number,
+  studentId: number | string,
   status: 'Present' | 'Absent'
 ): Promise<AttendanceAdminDto> {
   const newStatus = status === 'Present' ? 'Present' : 'Absent';

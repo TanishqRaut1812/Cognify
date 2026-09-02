@@ -1,10 +1,9 @@
-import { query, transaction } from '../db/pool';
+import { query } from '../db/pool';
 import { generateAttemptToken } from './studentAuth.service';
-import { QuestionDto, TestMetadataDto } from '../types/read.types';
-import { AppError, NotFoundError, ValidationError } from '../types/api.types';
+import { TestMetadataDto } from '../types/read.types';
+import { NotFoundError, ValidationError } from '../types/api.types';
 
 export interface StudentProfileDto {
-  id: number;
   registrationNumber: string;
   name: string;
   class: string;
@@ -13,7 +12,6 @@ export interface StudentProfileDto {
 export interface StudentAttemptDetailsDto {
   id: number;
   testId: number;
-  studentId?: number;
   registrationNo: string;
   startedAt: string;
   deadline: string;
@@ -36,11 +34,6 @@ export interface SafeStudentQuestionDto {
   marks: number;
 }
 
-export interface StudentAnswerDto {
-  questionId: number;
-  selectedOption: string;
-}
-
 export interface StudentResultDto {
   testId: number;
   testTitle: string;
@@ -58,9 +51,9 @@ export async function verifyStudent(registrationNumber: string): Promise<Student
 
   const regNo = registrationNumber.trim();
   const sql = `
-    SELECT id, registration_no AS "registrationNumber", name, class_name AS class
+    SELECT registration_no AS "registrationNumber", name, class_name AS class
     FROM students
-    WHERE registration_no = $1 OR registration_number = $1
+    WHERE registration_no = $1
     LIMIT 1;
   `;
 
@@ -79,490 +72,294 @@ export async function getAvailableTestsForStudent(registrationNumber: string): P
     SELECT 
       t.id,
       t.test_number AS "testNumber",
-      COALESCE(NULLIF(t.title, ''), t.test_name) AS title,
-      c.code AS "className",
-      t.class_id AS "classId",
+      t.test_name AS title,
+      t.class_name AS "className",
       t.test_date AS "testDate",
       t.start_time AS "startTime",
       t.finish_time AS "finishTime",
       t.duration_minutes AS "durationMinutes",
       t.total_marks AS "totalMarks",
       t.status,
-      t.result_status AS "resultStatus",
       (t.is_published = 1) AS "isPublished",
       t.instructions
     FROM tests t
-    LEFT JOIN classes c ON t.class_id = c.id
-    WHERE (t.class_id = (SELECT class_id FROM students WHERE id = $1) OR c.code = $2)
-    ORDER BY t.test_date DESC, t.id DESC;
+    ORDER BY t.id ASC;
   `;
 
-  const res = await query(sql, [student.id, student.class]);
-  return res.rows;
+  const res = await query(sql);
+  return res.rows.map((t) => ({
+    id: t.id,
+    testNumber: t.testNumber,
+    title: t.title,
+    className: t.className || student.class,
+    testDate: t.testDate,
+    startTime: t.startTime,
+    finishTime: t.finishTime,
+    durationMinutes: t.durationMinutes,
+    totalMarks: parseFloat(t.totalMarks) || 50,
+    status: t.status,
+    isPublished: Boolean(t.isPublished),
+    resultStatus: Boolean(t.isPublished) ? 'Published' : 'Unpublished',
+    instructions: t.instructions || ''
+  }));
 }
 
-export async function startTestAttempt(
-  registrationNumber: string,
-  testId: number
-): Promise<{ attempt: StudentAttemptDetailsDto; attemptToken: string }> {
+export async function startTestAttempt(testId: number, registrationNumber: string): Promise<{
+  attemptId: number;
+  attemptToken: string;
+  student: StudentProfileDto;
+  test: TestMetadataDto;
+  questions: SafeStudentQuestionDto[];
+  startedAt: string;
+  deadline: string;
+  durationMinutes: number;
+}> {
   const student = await verifyStudent(registrationNumber);
-
-  // Fetch test details
-  const testRes = await query(`SELECT * FROM tests WHERE id = $1;`, [testId]);
+  
+  const testRes = await query('SELECT * FROM tests WHERE id = $1', [testId]);
   if (testRes.rows.length === 0) {
     throw new NotFoundError(`Test with ID ${testId} not found`);
   }
   const test = testRes.rows[0];
+  const durationMins = test.duration_minutes || 60;
 
-  if (test.status === 'Upcoming') {
-    throw new AppError('Test is not yet active for student attempts', 403, 'TEST_NOT_ACTIVE');
-  }
-
-  if (test.status === 'Completed') {
-    throw new AppError('Test has already been completed by admin', 403, 'TEST_COMPLETED');
-  }
-
-  // Execute within transaction to prevent race conditions & duplicate attempts
-  return await transaction(async (client) => {
-    // Lock existing attempt for this student and test
-    const existingRes = await client.query(
-      `SELECT * FROM student_attempts WHERE test_id = $1 AND (student_id = $2 OR registration_no = $3) FOR UPDATE;`,
-      [testId, student.id, student.registrationNumber]
-    );
-
-    let attemptRow: any;
-
-    if (existingRes.rows.length > 0) {
-      attemptRow = existingRes.rows[0];
-
-      if (attemptRow.attempt_status === 'Submitted' || attemptRow.attempt_status === 'Terminated') {
-        throw new AppError(
-          `Test attempt is already ${attemptRow.attempt_status.toLowerCase()}`,
-          409,
-          'ATTEMPT_ALREADY_COMPLETED'
-        );
-      }
-    } else {
-      // Create new attempt row
-      const insertRes = await client.query(
-        `
-        INSERT INTO student_attempts (
-          test_id, student_id, registration_no, started_at, start_time, attempt_status, attendance,
-          fullscreen_violation_count, violation_count, cheating_flag
-        ) VALUES ($1, $2, $3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'In Progress', 'Absent', 0, 0, 0)
-        RETURNING *;
-      `,
-        [testId, student.id, student.registrationNumber]
-      );
-      attemptRow = insertRes.rows[0];
-    }
-
-    const startedAt = new Date(attemptRow.started_at || attemptRow.start_time || Date.now());
-    const durationMinutes = test.duration_minutes || 60;
-    const deadline = new Date(startedAt.getTime() + durationMinutes * 60 * 1000);
-    const now = new Date();
-
-    // Expiry check
-    if (now > deadline && attemptRow.attempt_status === 'In Progress') {
-      await finalizeAttemptExpiry(client, attemptRow.id, test);
-      throw new AppError('Attempt deadline has passed', 410, 'ATTEMPT_EXPIRED');
-    }
-
-    const attemptToken = generateAttemptToken(
-      attemptRow.id,
-      testId,
-      student.registrationNumber,
-      durationMinutes
-    );
-
-    const attemptDetails: StudentAttemptDetailsDto = {
-      id: attemptRow.id,
-      testId,
-      studentId: student.id,
-      registrationNo: student.registrationNumber,
-      startedAt: startedAt.toISOString(),
-      deadline: deadline.toISOString(),
-      currentServerTime: now.toISOString(),
-      attemptStatus: attemptRow.attempt_status,
-      fullscreenViolationCount: attemptRow.fullscreen_violation_count || 0,
-      cheatingFlag: attemptRow.cheating_flag === 1
-    };
-
-    return { attempt: attemptDetails, attemptToken };
-  });
-}
-
-export async function finalizeAttemptExpiry(clientOrPool: any, attemptId: number, test: any): Promise<void> {
-  const answersRes = await clientOrPool.query(
-    `SELECT question_id, selected_answer, selected_option FROM student_answers WHERE attempt_id = $1;`,
-    [attemptId]
-  );
-  const questionsRes = await clientOrPool.query(
-    `SELECT id, correct_answer, marks FROM questions WHERE test_id = $1 AND is_active = 1;`,
-    [test.id]
+  const attemptRes = await query(
+    `INSERT INTO student_attempts (test_id, registration_no, attempt_status, attendance, started_at, start_time)
+     VALUES ($1, $2, 'In Progress', 'Present', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+     ON CONFLICT (test_id, registration_no) DO UPDATE 
+     SET attempt_status = EXCLUDED.attempt_status, attendance = 'Present'
+     RETURNING id, started_at, start_time`,
+    [testId, student.registrationNumber]
   );
 
-  const answerMap = new Map<number, string>();
-  answersRes.rows.forEach((r: any) => {
-    answerMap.set(r.question_id, r.selected_answer || r.selected_option || '');
-  });
+  const attemptId = attemptRes.rows[0].id;
+  const attemptToken = generateAttemptToken(attemptId, testId, student.registrationNumber, durationMins);
 
-  let totalScore = 0;
-  questionsRes.rows.forEach((q: any) => {
-    const selected = answerMap.get(q.id);
-    if (selected && selected.toUpperCase() === q.correct_answer.toUpperCase()) {
-      totalScore += parseFloat(q.marks || 1.0);
-    }
-  });
-
-  const percentage = Math.round((totalScore / test.total_marks) * 10000) / 100;
-
-  await clientOrPool.query(
-    `
-    UPDATE student_attempts
-    SET 
-      attempt_status = 'Submitted',
-      submitted_at = CURRENT_TIMESTAMP,
-      score = $1,
-      calculated_score = $1,
-      percentage = $2,
-      calculated_percentage = $2,
-      updated_at = CURRENT_TIMESTAMP
-    WHERE id = $3;
-  `,
-    [totalScore, percentage, attemptId]
+  const qRes = await query(
+    `SELECT id, question_number AS "questionNumber", question_text AS "questionText", option_a AS "optionA", option_b AS "optionB", option_c AS "optionC", option_d AS "optionD", marks
+     FROM test_questions
+     WHERE test_id = $1 AND is_active = 1
+     ORDER BY question_number ASC`,
+    [testId]
   );
+  const startedAtIso = new Date().toISOString();
+  const deadlineIso = new Date(Date.now() + durationMins * 60 * 1000).toISOString();
 
-  // Sync to test_results
-  const attRes = await clientOrPool.query(`SELECT registration_no, student_id FROM student_attempts WHERE id = $1;`, [attemptId]);
-  if (attRes.rows.length > 0) {
-    const regNo = attRes.rows[0].registration_no;
-    const stId = attRes.rows[0].student_id;
-    await clientOrPool.query(
-      `
-      INSERT INTO test_results (test_id, student_id, registration_no, attendance, marks_obtained, percentage, published)
-      VALUES ($1, $2, $3, 'Absent', $4, $5, 0)
-      ON CONFLICT (test_id, registration_no)
-      DO UPDATE SET 
-        marks_obtained = EXCLUDED.marks_obtained,
-        percentage = EXCLUDED.percentage,
-        updated_at = CURRENT_TIMESTAMP;
-    `,
-      [test.id, stId, regNo, totalScore, percentage]
-    );
-  }
+  return {
+    attemptId,
+    attemptToken,
+    student,
+    test: {
+      id: test.id,
+      testNumber: test.test_number,
+      title: test.test_name,
+      className: student.class,
+      testDate: test.test_date,
+      startTime: test.start_time,
+      finishTime: test.finish_time,
+      durationMinutes: durationMins,
+      totalMarks: parseFloat(test.total_marks) || 50,
+      status: test.status,
+      isPublished: Boolean(test.is_published),
+      resultStatus: Boolean(test.is_published) ? 'Published' : 'Unpublished',
+      instructions: test.instructions || ''
+    },
+    questions: qRes.rows.map((q) => ({
+      id: q.id,
+      questionNumber: q.questionNumber,
+      questionText: q.questionText,
+      optionA: q.optionA,
+      optionB: q.optionB,
+      optionC: q.optionC,
+      optionD: q.optionD,
+      marks: parseFloat(q.marks) || 1.0
+    })),
+    startedAt: startedAtIso,
+    deadline: deadlineIso,
+    durationMinutes: durationMins
+  };
 }
 
 export async function getAttemptDetailsAdminOrStudent(attemptId: number): Promise<StudentAttemptDetailsDto> {
-  const sql = `
-    SELECT 
-      sa.id,
-      sa.test_id AS "testId",
-      sa.student_id AS "studentId",
-      sa.registration_no AS "registrationNo",
-      sa.started_at AS "startedAt",
-      sa.start_time AS "startTime",
-      sa.attempt_status AS "attemptStatus",
-      sa.fullscreen_violation_count AS "fullscreenViolationCount",
-      (sa.cheating_flag = 1) AS "cheatingFlag",
-      t.duration_minutes AS "durationMinutes"
-    FROM student_attempts sa
-    LEFT JOIN tests t ON sa.test_id = t.id
-    WHERE sa.id = $1;
-  `;
+  const res = await query(
+    `SELECT 
+       sa.id,
+       sa.test_id AS "testId",
+       sa.registration_no AS "registrationNo",
+       sa.started_at AS "startedAt",
+       sa.attempt_status AS "attemptStatus",
+       sa.violation_count AS "fullscreenViolationCount",
+       sa.cheating_flag AS "cheatingFlag",
+       sa.calculated_score AS score,
+       sa.calculated_percentage AS percentage,
+       t.duration_minutes
+     FROM student_attempts sa
+     JOIN tests t ON sa.test_id = t.id
+     WHERE sa.id = $1`,
+    [attemptId]
+  );
 
-  const res = await query(sql, [attemptId]);
   if (res.rows.length === 0) {
-    throw new NotFoundError(`Attempt with ID ${attemptId} not found`);
+    throw new NotFoundError(`Attempt ID ${attemptId} not found`);
   }
 
   const row = res.rows[0];
-  const startedAt = new Date(row.startedAt || row.startTime || Date.now());
-  const deadline = new Date(startedAt.getTime() + (row.durationMinutes || 60) * 60 * 1000);
-  const now = new Date();
-
-  if (now > deadline && row.attemptStatus === 'In Progress') {
-    const testRes = await query(`SELECT * FROM tests WHERE id = $1;`, [row.testId]);
-    if (testRes.rows.length > 0) {
-      await finalizeAttemptExpiry(query, attemptId, testRes.rows[0]);
-      row.attemptStatus = 'Submitted';
-    }
-  }
+  const durationMins = row.duration_minutes || 60;
+  const startedAtIso = row.startedAt ? new Date(row.startedAt).toISOString() : new Date().toISOString();
+  const deadlineIso = new Date(new Date(startedAtIso).getTime() + durationMins * 60 * 1000).toISOString();
 
   return {
     id: row.id,
     testId: row.testId,
-    studentId: row.studentId,
     registrationNo: row.registrationNo,
-    startedAt: startedAt.toISOString(),
-    deadline: deadline.toISOString(),
-    currentServerTime: now.toISOString(),
-    attemptStatus: row.attemptStatus as any,
+    startedAt: startedAtIso,
+    deadline: deadlineIso,
+    currentServerTime: new Date().toISOString(),
+    attemptStatus: row.attemptStatus,
     fullscreenViolationCount: row.fullscreenViolationCount || 0,
-    cheatingFlag: row.cheatingFlag
+    cheatingFlag: Boolean(row.cheatingFlag),
+    score: parseFloat(row.score) || 0.0,
+    percentage: parseFloat(row.percentage) || 0.0
   };
 }
 
 export async function getExamQuestionsForStudent(attemptId: number): Promise<SafeStudentQuestionDto[]> {
-  const attempt = await getAttemptDetailsAdminOrStudent(attemptId);
-
-  if (attempt.attemptStatus === 'Terminated') {
-    throw new AppError('Attempt terminated due to cheating violations', 403, 'ATTEMPT_TERMINATED');
+  const attRes = await query('SELECT test_id FROM student_attempts WHERE id = $1', [attemptId]);
+  if (attRes.rows.length === 0) {
+    throw new NotFoundError(`Attempt ID ${attemptId} not found`);
   }
+  const testId = attRes.rows[0].test_id;
 
-  const sql = `
-    SELECT 
-      id,
-      question_number AS "questionNumber",
-      question_text AS "questionText",
-      option_a AS "optionA",
-      option_b AS "optionB",
-      option_c AS "optionC",
-      option_d AS "optionD",
-      marks
-    FROM questions
-    WHERE test_id = $1 AND is_active = 1
-    ORDER BY question_number ASC, id ASC;
-  `;
+  const res = await query(
+    `SELECT id, question_number AS "questionNumber", question_text AS "questionText", option_a AS "optionA", option_b AS "optionB", option_c AS "optionC", option_d AS "optionD", marks
+     FROM test_questions
+     WHERE test_id = $1 AND is_active = 1
+     ORDER BY question_number ASC`,
+    [testId]
+  );
 
-  const res = await query(sql, [attempt.testId]);
-  return res.rows.map((r) => ({
-    ...r,
-    marks: parseFloat(r.marks)
+  return res.rows.map((q) => ({
+    id: q.id,
+    questionNumber: q.questionNumber,
+    questionText: q.questionText,
+    optionA: q.optionA,
+    optionB: q.optionB,
+    optionC: q.optionC,
+    optionD: q.optionD,
+    marks: parseFloat(q.marks) || 1.0
   }));
 }
 
-export async function saveStudentAnswer(
-  attemptId: number,
-  questionId: number,
-  selectedOption: string
-): Promise<{ success: boolean; questionId: number; selectedOption: string }> {
-  const attempt = await getAttemptDetailsAdminOrStudent(attemptId);
-
-  if (attempt.attemptStatus !== 'In Progress') {
-    throw new AppError(`Cannot save answers for attempt with status '${attempt.attemptStatus}'`, 403, 'ATTEMPT_NOT_IN_PROGRESS');
-  }
-
-  const opt = (selectedOption || '').trim().toUpperCase();
-  if (opt !== '' && !['A', 'B', 'C', 'D'].includes(opt)) {
-    throw new ValidationError('Selected option must be A, B, C, D, or empty');
-  }
-
-  // Verify question belongs to test
-  const qCheck = await query(`SELECT id FROM questions WHERE id = $1 AND test_id = $2;`, [questionId, attempt.testId]);
-  if (qCheck.rows.length === 0) {
-    throw new ValidationError(`Question ${questionId} does not belong to test ${attempt.testId}`);
-  }
-
-  const sql = `
-    INSERT INTO student_answers (attempt_id, question_id, selected_answer, selected_option, answered_at, saved_at)
-    VALUES ($1, $2, $3, $3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    ON CONFLICT (attempt_id, question_id)
-    DO UPDATE SET 
-      selected_answer = EXCLUDED.selected_answer,
-      selected_option = EXCLUDED.selected_option,
-      saved_at = CURRENT_TIMESTAMP;
-  `;
-
-  await query(sql, [attemptId, questionId, opt]);
-  return { success: true, questionId, selectedOption: opt };
+export async function getSavedAnswersForStudent(attemptId: number): Promise<{ questionId: number; selectedOption: string }[]> {
+  const res = await query(
+    `SELECT question_id AS "questionId", selected_option AS "selectedOption"
+     FROM student_answers
+     WHERE attempt_id = $1`,
+    [attemptId]
+  );
+  return res.rows.map((r) => ({
+    questionId: r.questionId,
+    selectedOption: r.selectedOption || ''
+  }));
 }
 
-export async function getSavedAnswersForStudent(attemptId: number): Promise<StudentAnswerDto[]> {
-  await getAttemptDetailsAdminOrStudent(attemptId);
-
-  const sql = `
-    SELECT 
-      question_id AS "questionId",
-      COALESCE(NULLIF(selected_answer, ''), selected_option, '') AS "selectedOption"
-    FROM student_answers
-    WHERE attempt_id = $1
-    ORDER BY question_id ASC;
-  `;
-
-  const res = await query(sql, [attemptId]);
-  return res.rows;
+export async function saveStudentAnswer(attemptId: number, questionId: number, selectedOption: string): Promise<void> {
+  await query(
+    `INSERT INTO student_answers (attempt_id, question_id, selected_option)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (attempt_id, question_id) DO UPDATE SET selected_option = EXCLUDED.selected_option`,
+    [attemptId, questionId, selectedOption || '']
+  );
 }
 
-export async function reportFullscreenViolation(
-  attemptId: number
-): Promise<{ violationCount: number; terminated: boolean; cheating: boolean; message?: string }> {
-  const attempt = await getAttemptDetailsAdminOrStudent(attemptId);
+export async function reportFullscreenViolation(attemptId: number): Promise<{ violationCount: number; terminated: boolean }> {
+  const res = await query(
+    `UPDATE student_attempts
+     SET violation_count = violation_count + 1,
+         fullscreen_violation_count = fullscreen_violation_count + 1,
+         attempt_status = CASE WHEN violation_count + 1 > 3 THEN 'Terminated' ELSE attempt_status END,
+         cheating_flag = CASE WHEN violation_count + 1 > 3 THEN 1 ELSE cheating_flag END
+     WHERE id = $1
+     RETURNING violation_count, attempt_status`,
+    [attemptId]
+  );
 
-  if (attempt.attemptStatus === 'Terminated' || attempt.cheatingFlag) {
-    return {
-      violationCount: attempt.fullscreenViolationCount,
-      terminated: true,
-      cheating: true,
-      message: 'Attempt is already terminated for cheating'
-    };
+  if (res.rows.length === 0) {
+    throw new NotFoundError(`Attempt ID ${attemptId} not found`);
   }
 
-  if (attempt.attemptStatus === 'Submitted') {
-    throw new AppError('Attempt is already submitted', 400, 'ATTEMPT_SUBMITTED');
-  }
-
-  const newCount = attempt.fullscreenViolationCount + 1;
-  const isTerminated = newCount > 3;
-  const newStatus = isTerminated ? 'Terminated' : 'In Progress';
-  const cheatingFlag = isTerminated ? 1 : 0;
-
-  const sql = `
-    UPDATE student_attempts
-    SET 
-      fullscreen_violation_count = $1,
-      violation_count = $1,
-      cheating_flag = $2,
-      attempt_status = $3,
-      updated_at = CURRENT_TIMESTAMP
-    WHERE id = $4
-    RETURNING fullscreen_violation_count;
-  `;
-
-  await query(sql, [newCount, cheatingFlag, newStatus, attemptId]);
-
-  return {
-    violationCount: newCount,
-    terminated: isTerminated,
-    cheating: isTerminated,
-    message: isTerminated ? 'Test attempt terminated due to excessive fullscreen exits (>3 violations).' : `Warning: Fullscreen exit #${newCount} recorded.`
-  };
+  const vCount = res.rows[0].violation_count;
+  const isTerminated = res.rows[0].attempt_status === 'Terminated';
+  return { violationCount: vCount, terminated: isTerminated };
 }
 
-export async function submitTestAttempt(attemptId: number): Promise<{
-  success: boolean;
-  attemptId: number;
-  status: string;
-  submittedAt: string;
-  message: string;
-}> {
-  return await transaction(async (client) => {
-    // Lock attempt row
-    const attRes = await client.query(`SELECT * FROM student_attempts WHERE id = $1 FOR UPDATE;`, [attemptId]);
-    if (attRes.rows.length === 0) {
-      throw new NotFoundError(`Attempt with ID ${attemptId} not found`);
+export async function submitTestAttempt(attemptId: number): Promise<{ score: number; percentage: number }> {
+  const answersRes = await query(
+    `SELECT sa.selected_option, tq.correct_option, tq.marks
+     FROM student_answers sa
+     JOIN test_questions tq ON sa.question_id = tq.id
+     WHERE sa.attempt_id = $1`,
+    [attemptId]
+  );
+
+  let marksObtained = 0.0;
+  for (const a of answersRes.rows) {
+    if (a.selected_option && a.selected_option.trim().toUpperCase() === a.correct_option.trim().toUpperCase()) {
+      marksObtained += parseFloat(a.marks) || 1.0;
     }
+  }
 
-    const attempt = attRes.rows[0];
+  const attRes = await query('SELECT test_id, registration_no FROM student_attempts WHERE id = $1', [attemptId]);
+  if (attRes.rows.length === 0) {
+    throw new NotFoundError(`Attempt ID ${attemptId} not found`);
+  }
+  const { test_id, registration_no } = attRes.rows[0];
 
-    if (attempt.attempt_status === 'Submitted') {
-      return {
-        success: true,
-        attemptId,
-        status: 'Submitted',
-        submittedAt: new Date(attempt.submitted_at || Date.now()).toISOString(),
-        message: 'Test has already been submitted.'
-      };
-    }
+  const testRes = await query('SELECT total_marks FROM tests WHERE id = $1', [test_id]);
+  const totalMarks = parseFloat(testRes.rows[0]?.total_marks) || 50.0;
+  const percentage = Math.round((marksObtained / totalMarks) * 10000) / 100;
 
-    if (attempt.attempt_status === 'Terminated') {
-      throw new AppError('Terminated test attempts cannot be submitted normally', 403, 'ATTEMPT_TERMINATED');
-    }
+  await query(
+    `UPDATE student_attempts
+     SET attempt_status = 'Submitted', submitted_at = CURRENT_TIMESTAMP, calculated_score = $1, calculated_percentage = $2, score = $1, percentage = $2
+     WHERE id = $3`,
+    [attemptId]
+  );
 
-    const testId = attempt.test_id;
-    const testRes = await client.query(`SELECT * FROM tests WHERE id = $1;`, [testId]);
-    const test = testRes.rows[0];
+  await query(
+    `INSERT INTO test_results (test_id, registration_no, attendance, marks_obtained, percentage)
+     VALUES ($1, $2, 'Present', $3, $4)
+     ON CONFLICT (test_id, registration_no) DO UPDATE SET marks_obtained = EXCLUDED.marks_obtained, percentage = EXCLUDED.percentage`,
+    [test_id, registration_no, marksObtained, percentage]
+  );
 
-    // Load active questions & correct answers
-    const questionsRes = await client.query(
-      `SELECT id, correct_answer, marks FROM questions WHERE test_id = $1 AND is_active = 1;`,
-      [testId]
-    );
-
-    // Load saved answers
-    const answersRes = await client.query(
-      `SELECT question_id, selected_answer, selected_option FROM student_answers WHERE attempt_id = $1;`,
-      [attemptId]
-    );
-
-    const answerMap = new Map<number, string>();
-    answersRes.rows.forEach((r: any) => {
-      answerMap.set(r.question_id, r.selected_answer || r.selected_option || '');
-    });
-
-    let totalScore = 0;
-    questionsRes.rows.forEach((q: any) => {
-      const selected = answerMap.get(q.id);
-      if (selected && selected.toUpperCase() === q.correct_answer.toUpperCase()) {
-        totalScore += parseFloat(q.marks || 1.0);
-      }
-    });
-
-    const totalMarks = parseFloat(test.total_marks || 100);
-    const percentage = Math.round((totalScore / totalMarks) * 10000) / 100;
-    const submittedAt = new Date();
-
-    // Update attempt
-    await client.query(
-      `
-      UPDATE student_attempts
-      SET 
-        attempt_status = 'Submitted',
-        submitted_at = $1,
-        score = $2,
-        calculated_score = $2,
-        percentage = $3,
-        calculated_percentage = $3,
-        updated_at = CURRENT_TIMESTAMP
-      WHERE id = $4;
-    `,
-      [submittedAt, totalScore, percentage, attemptId]
-    );
-
-    // Upsert into test_results
-    await client.query(
-      `
-      INSERT INTO test_results (test_id, student_id, registration_no, attendance, marks_obtained, percentage, published)
-      VALUES ($1, $2, $3, 'Absent', $4, $5, $6)
-      ON CONFLICT (test_id, registration_no)
-      DO UPDATE SET 
-        marks_obtained = EXCLUDED.marks_obtained,
-        percentage = EXCLUDED.percentage,
-        updated_at = CURRENT_TIMESTAMP;
-    `,
-      [testId, attempt.student_id, attempt.registration_no, totalScore, percentage, test.result_status === 'Published' ? 1 : 0]
-    );
-
-    return {
-      success: true,
-      attemptId,
-      status: 'Submitted',
-      submittedAt: submittedAt.toISOString(),
-      message: 'Test submitted successfully.'
-    };
-  });
+  return { score: marksObtained, percentage };
 }
 
 export async function getStudentResultsService(registrationNumber: string): Promise<StudentResultDto[]> {
-  const student = await verifyStudent(registrationNumber);
+  const res = await query(
+    `SELECT 
+       t.id AS "testId",
+       t.test_name AS "testTitle",
+       t.total_marks AS "totalMarks",
+       COALESCE(tr.attendance, sa.attendance, 'Absent') AS attendance,
+       (t.is_published = 1) AS published,
+       tr.marks_obtained AS "marksObtained",
+       tr.percentage AS percentage
+     FROM tests t
+     LEFT JOIN test_results tr ON t.id = tr.test_id AND tr.registration_no = $1
+     LEFT JOIN student_attempts sa ON t.id = sa.test_id AND sa.registration_no = $1
+     ORDER BY t.id ASC`,
+    [registrationNumber]
+  );
 
-  const sql = `
-    SELECT 
-      tr.test_id AS "testId",
-      COALESCE(NULLIF(t.title, ''), t.test_name) AS "testTitle",
-      t.total_marks AS "totalMarks",
-      tr.attendance,
-      (tr.published = 1 AND t.result_status = 'Published') AS published,
-      tr.marks_obtained AS "marksObtained",
-      tr.percentage
-    FROM test_results tr
-    LEFT JOIN tests t ON tr.test_id = t.id
-    WHERE tr.student_id = $1 OR tr.registration_no = $2
-    ORDER BY t.test_date DESC, t.id DESC;
-  `;
-
-  const res = await query(sql, [student.id, student.registrationNumber]);
-
-  return res.rows.map((r) => {
-    const isPub = Boolean(r.published);
-    return {
-      testId: r.testId,
-      testTitle: r.testTitle,
-      totalMarks: parseFloat(r.totalMarks),
-      attendance: r.attendance,
-      published: isPub,
-      marksObtained: isPub ? parseFloat(r.marksObtained) : null,
-      percentage: isPub ? parseFloat(r.percentage) : null
-    };
-  });
+  return res.rows.map((r) => ({
+    testId: r.testId,
+    testTitle: r.testTitle,
+    totalMarks: parseFloat(r.totalMarks) || 50,
+    attendance: r.attendance,
+    published: Boolean(r.published),
+    marksObtained: r.marksObtained !== null ? parseFloat(r.marksObtained) : null,
+    percentage: r.percentage !== null ? parseFloat(r.percentage) : null
+  }));
 }

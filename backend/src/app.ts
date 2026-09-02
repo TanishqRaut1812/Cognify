@@ -83,10 +83,13 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
+import legacyRoutes from './routes/legacy.routes';
+
 // ROUTES
 app.use('/api/health', healthRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/student', studentRoutes);
+app.use('/api', legacyRoutes);
 app.use('/api', apiRoutes);
 
 // 404 HANDLER

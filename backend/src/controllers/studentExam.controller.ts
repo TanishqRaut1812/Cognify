@@ -43,7 +43,7 @@ export async function startTestHandler(req: Request, res: Response, next: NextFu
     const testId = parseInt(req.params.testId, 10);
     if (isNaN(testId)) throw new ValidationError('Invalid test ID');
     const { registrationNumber } = req.body;
-    const result = await startTestAttempt(registrationNumber, testId);
+    const result = await startTestAttempt(testId, registrationNumber);
     sendSuccess(res, result, 201);
   } catch (err) {
     next(err);
