@@ -198,16 +198,20 @@ import { AttendanceRecord, AuditLog, Resource, SyllabusCategory } from '../../..
                 <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
                   <td style="padding: 10px; font-family: monospace;">#{{ att.id }}</td>
                   <td style="padding: 10px; font-weight: 700;">{{ att.registrationNo || att.registration_no }}</td>
-                  <td style="padding: 10px; font-size: 12px;">{{ att.startTime || att.start_time || '--' }}</td>
-                  <td style="padding: 10px; font-size: 12px;">{{ att.endTime || att.end_time || '--' }}</td>
+                  <td style="padding: 10px; font-size: 12px;">{{ att.startedAt || att.startTime || att.start_time || '--' }}</td>
+                  <td style="padding: 10px; font-size: 12px;">{{ att.submittedAt || att.endTime || att.end_time || '--' }}</td>
                   <td style="padding: 10px;">
-                    <span style="color: {{ (att.fullscreenViolations || 0) > 0 ? 'var(--accent-rose)' : 'var(--text-muted)' }}; font-weight: 700;">
-                      {{ att.fullscreenViolations || att.fullscreen_violations || 0 }}
+                    <span style="color: {{ (att.fullscreenViolationCount || att.fullscreenViolations || 0) > 0 ? 'var(--accent-rose)' : 'var(--text-muted)' }}; font-weight: 700;">
+                      {{ att.fullscreenViolationCount || att.fullscreenViolations || att.fullscreen_violations || 0 }}
                     </span>
                   </td>
                   <td style="padding: 10px;">
-                    <span class="timeline-tag" [class.tag-current]="att.status === 'Completed' || att.status === 'submitted'" [class.tag-upcoming]="att.status !== 'Completed'">
-                      {{ att.status }}
+                    <span class="timeline-tag"
+                          [class.tag-current]="(att.attemptStatus || att.status) === 'Submitted' || (att.attemptStatus || att.status) === 'Completed'"
+                          [class.tag-upcoming]="(att.attemptStatus || att.status) === 'In Progress' || (att.attemptStatus || att.status) === 'Not Started'"
+                          [style.background]="(att.attemptStatus || att.status) === 'Terminated' ? 'rgba(239, 68, 68, 0.2)' : null"
+                          [style.color]="(att.attemptStatus || att.status) === 'Terminated' ? 'var(--accent-rose)' : null">
+                      {{ att.attemptStatus || att.status || 'Not Started' }}
                     </span>
                   </td>
                   <td style="padding: 10px; font-weight: 800; color: var(--accent-sky);">{{ att.score !== undefined ? att.score : (att.calculatedScore || 0) }}</td>
@@ -709,10 +713,17 @@ export class TestWorkspaceComponent implements OnInit {
 
   getFilteredAttempts(): any[] {
     if (this.attemptFilter === 'submitted') {
-      return this.attemptsList().filter((a) => a.status === 'Completed' || a.status === 'submitted');
+      return this.attemptsList().filter((a) => {
+        const st = a.attemptStatus || a.status;
+        return st === 'Submitted' || st === 'Completed' || st === 'submitted';
+      });
     }
     if (this.attemptFilter === 'flagged') {
-      return this.attemptsList().filter((a) => (a.fullscreenViolations || a.fullscreen_violations || 0) > 0 || a.status === 'Terminated');
+      return this.attemptsList().filter((a) => {
+        const st = a.attemptStatus || a.status;
+        const v = a.fullscreenViolationCount || a.fullscreenViolations || a.fullscreen_violations || 0;
+        return v > 0 || st === 'Terminated';
+      });
     }
     return this.attemptsList();
   }

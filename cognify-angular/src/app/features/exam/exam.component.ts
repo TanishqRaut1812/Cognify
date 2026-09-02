@@ -55,6 +55,29 @@ import { SubmissionReviewModalComponent } from './submission-review-modal.compon
     <!-- 2. ACTIVE EXAM WORKSPACE -->
     @if (activeExamState(); as exam) {
       @if (!exam.isSubmitted && !exam.isTerminated) {
+        <!-- 2.5 FULLSCREEN WARNING MODAL -->
+        @if (showFullscreenWarning()) {
+          <div class="modal-overlay" style="z-index: 10000; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(8px);">
+            <div class="modal-card" style="border: 2px solid var(--accent-rose); max-width: 500px; text-align: center;">
+              <div style="width: 56px; height: 56px; border-radius: 50%; background: rgba(239, 68, 68, 0.15); color: var(--accent-rose); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px auto;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              </div>
+              <h3 style="font-size: 22px; color: var(--accent-rose); margin-bottom: 8px;">Anti-Cheat Warning: Fullscreen Exited!</h3>
+              <p style="color: var(--text-primary); font-size: 14px; margin-bottom: 16px;">
+                You have exited browser fullscreen mode.
+                <br>
+                <strong style="color: var(--accent-rose);">Violation {{ currentViolationCount() }} of 4 recorded.</strong>
+              </p>
+              <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.25); padding: 12px; border-radius: var(--radius-sm); font-size: 13px; color: var(--text-secondary); margin-bottom: 20px;">
+                Cognify anti-cheat security policy: 4th fullscreen exit will immediately terminate your exam attempt and record a cheating violation.
+              </div>
+              <button type="button" class="btn btn-danger btn-lg" (click)="reenterFullscreen()" style="width: 100%; font-weight: 700;">
+                Re-enter Fullscreen Mode
+              </button>
+            </div>
+          </div>
+        }
+
         <div class="exam-container">
           <div class="exam-top-bar">
             <div class="exam-brand">
@@ -209,9 +232,12 @@ export class ExamComponent implements OnInit {
   errorMessage = signal('');
   isLoading = signal(false);
   showReviewModal = signal(false);
+  showFullscreenWarning = signal(false);
+  currentViolationCount = signal(0);
   activeExamState = this.examService.activeExam;
   targetTestId = 0;
   private lastViolationTime = 0;
+  private wasInFullscreen = false;
 
   async ngOnInit(): Promise<void> {
     const idParam = this.route.snapshot.queryParamMap.get('testId');
@@ -240,29 +266,44 @@ export class ExamComponent implements OnInit {
 
     const current = this.activeExamState();
 
-    // Trigger violation ONLY if browser fullscreen is exited while attempt is active
-    if (!isFullscreen && current && !current.isSubmitted && !current.isTerminated) {
+    if (isFullscreen) {
+      this.wasInFullscreen = true;
+      this.showFullscreenWarning.set(false);
+      return;
+    }
+
+    // Trigger violation ONLY if candidate was in fullscreen and exited while attempt is active
+    if (!isFullscreen && this.wasInFullscreen && current && !current.isSubmitted && !current.isTerminated) {
+      this.wasInFullscreen = false;
       const now = Date.now();
-      if (now - this.lastViolationTime < 2500) return;
+      if (now - this.lastViolationTime < 1500) return;
       this.lastViolationTime = now;
 
       const cnt = await this.examService.logViolation('Browser Fullscreen Exit');
+      this.currentViolationCount.set(cnt);
+
       if (cnt < 4) {
-        alert(`Anti-Cheat Warning: Browser Fullscreen exit detected! (Violation ${cnt}/4). 4th exit will terminate the test.`);
+        this.showFullscreenWarning.set(true);
       }
     }
   }
 
-  requestBrowserFullscreen(): void {
+  async reenterFullscreen(): Promise<void> {
     try {
-      if (!document.fullscreenElement && !(document as any).webkitFullscreenElement) {
-        if (document.documentElement.requestFullscreen) {
-          document.documentElement.requestFullscreen().catch(() => {});
-        } else if ((document.documentElement as any).webkitRequestFullscreen) {
-          (document.documentElement as any).webkitRequestFullscreen();
-        }
+      if (document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen();
+      } else if ((document.documentElement as any).webkitRequestFullscreen) {
+        await (document.documentElement as any).webkitRequestFullscreen();
       }
-    } catch (e) {}
+      this.wasInFullscreen = true;
+      this.showFullscreenWarning.set(false);
+    } catch (e) {
+      console.warn('Re-entering fullscreen failed:', e);
+    }
+  }
+
+  requestBrowserFullscreen(): void {
+    this.reenterFullscreen();
   }
 
   async verifyAndStart(): Promise<void> {
@@ -277,7 +318,7 @@ export class ExamComponent implements OnInit {
     if (res.success && res.student) {
       try {
         await this.examService.startExam(res.student, this.targetTestId);
-        this.requestBrowserFullscreen();
+        await this.reenterFullscreen();
       } catch (e: any) {
         this.errorMessage.set(e.message || 'Failed to start exam.');
       }
