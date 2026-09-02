@@ -228,7 +228,8 @@ import { AttendanceRecord, AuditLog, Resource, SyllabusCategory } from '../../..
                     </span>
                   </td>
                   <td style="padding: 10px; font-weight: 800; color: var(--accent-sky);">{{ att.score !== undefined ? att.score : (att.calculatedScore || 0) }}</td>
-                  <td style="padding: 10px;">
+                  <td style="padding: 10px; display: flex; gap: 6px;">
+                    <button type="button" class="btn btn-secondary btn-sm" (click)="openAnswerReviewModal(att)">Review Answers</button>
                     <button type="button" class="btn btn-secondary btn-sm" (click)="openScoreOverrideModal(att)">Override Score</button>
                   </td>
                 </tr>
@@ -525,6 +526,118 @@ import { AttendanceRecord, AuditLog, Resource, SyllabusCategory } from '../../..
           </table>
         </div>
       }
+
+      <!-- ANSWER REVIEW MODAL -->
+      @if (showAnswerReviewModal()) {
+        <div class="modal-backdrop" style="position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 20px;">
+          <div class="modal-content" style="background: #0f172a; border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; max-width: 900px; width: 100%; max-height: 90vh; display: flex; flex-direction: column; color: #fff; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);">
+            
+            <div style="padding: 16px 24px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02);">
+              <div>
+                <h3 style="margin: 0; font-size: 18px; color: var(--accent-sky);">Attempt Answer Review</h3>
+                <p style="margin: 4px 0 0 0; font-size: 13px; color: var(--text-muted);">
+                  Candidate: <strong style="color: #fff;">{{ reviewData()?.registrationNo }}</strong> {{ reviewData()?.studentName ? '(' + reviewData()?.studentName + ')' : '' }} | Attempt #{{ reviewData()?.attemptId }} ({{ reviewData()?.attemptStatus }})
+                </p>
+              </div>
+              <button type="button" class="btn btn-secondary btn-sm" (click)="closeAnswerReviewModal()">✕ Close</button>
+            </div>
+
+            <div style="padding: 20px 24px; overflow-y: auto; flex: 1;">
+              @if (isLoadingReview()) {
+                <div style="text-align: center; padding: 40px 0; color: var(--text-muted);">
+                  Loading student saved answers from database...
+                </div>
+              } @else if (reviewData()) {
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin-bottom: 20px;">
+                  <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); padding: 10px; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Total Qs</div>
+                    <div style="font-size: 18px; font-weight: 800; margin-top: 2px;">{{ reviewData().summary.totalQuestions }}</div>
+                  </div>
+                  <div style="background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.2); padding: 10px; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 11px; color: var(--accent-sky); text-transform: uppercase;">Answered</div>
+                    <div style="font-size: 18px; font-weight: 800; color: var(--accent-sky); margin-top: 2px;">{{ reviewData().summary.answeredCount }}</div>
+                  </div>
+                  <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); padding: 10px; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Unanswered</div>
+                    <div style="font-size: 18px; font-weight: 800; color: var(--text-muted); margin-top: 2px;">{{ reviewData().summary.unansweredCount }}</div>
+                  </div>
+                  <div style="background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.2); padding: 10px; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 11px; color: #4ade80; text-transform: uppercase;">Correct</div>
+                    <div style="font-size: 18px; font-weight: 800; color: #4ade80; margin-top: 2px;">{{ reviewData().summary.correctCount }}</div>
+                  </div>
+                  <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); padding: 10px; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 11px; color: #f87171; text-transform: uppercase;">Incorrect</div>
+                    <div style="font-size: 18px; font-weight: 800; color: #f87171; margin-top: 2px;">{{ reviewData().summary.incorrectCount }}</div>
+                  </div>
+                  <div style="background: rgba(168, 85, 247, 0.1); border: 1px solid rgba(168, 85, 247, 0.2); padding: 10px; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 11px; color: #c084fc; text-transform: uppercase;">Marks</div>
+                    <div style="font-size: 18px; font-weight: 800; color: #c084fc; margin-top: 2px;">{{ reviewData().summary.calculatedMarks }} / {{ reviewData().summary.maxMarks }}</div>
+                  </div>
+                  <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.2); padding: 10px; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 11px; color: #fbbf24; text-transform: uppercase;">Percentage</div>
+                    <div style="font-size: 18px; font-weight: 800; color: #fbbf24; margin-top: 2px;">{{ reviewData().summary.percentage }}%</div>
+                  </div>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 16px;">
+                  @for (q of reviewData().questions; track q.questionId) {
+                    <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.07); border-radius: 8px; padding: 16px;">
+                      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+                        <span style="font-weight: 700; font-size: 14px; color: var(--accent-sky);">
+                          Q{{ q.questionNumber }}. {{ q.questionText }}
+                        </span>
+                        <span style="font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px;"
+                              [style.background]="q.isCorrect ? 'rgba(34, 197, 94, 0.2)' : (q.isAnswered ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255, 255, 255, 0.1)')"
+                              [style.color]="q.isCorrect ? '#4ade80' : (q.isAnswered ? '#f87171' : 'var(--text-muted)')">
+                          {{ q.isCorrect ? 'Correct (' + q.marks + ')' : (q.isAnswered ? 'Incorrect (0.0)' : 'Unanswered (0.0)') }}
+                        </span>
+                      </div>
+
+                      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; font-size: 13px;">
+                        <div style="padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);"
+                             [style.background]="q.selectedOption === 'A' ? (q.correctOption === 'A' ? 'rgba(34, 197, 94, 0.25)' : 'rgba(239, 68, 68, 0.25)') : (q.correctOption === 'A' ? 'rgba(34, 197, 94, 0.15)' : 'transparent')"
+                             [style.borderColor]="q.selectedOption === 'A' ? (q.correctOption === 'A' ? '#4ade80' : '#f87171') : (q.correctOption === 'A' ? '#4ade80' : 'rgba(255,255,255,0.05)')">
+                          <strong>A.</strong> {{ q.optionA }}
+                          @if (q.selectedOption === 'A') { <span style="font-size: 10px; font-weight: 700; margin-left: 6px; color: var(--accent-sky);">[Student Choice]</span> }
+                          @if (q.correctOption === 'A') { <span style="font-size: 10px; font-weight: 700; margin-left: 6px; color: #4ade80;">✓ Correct</span> }
+                        </div>
+
+                        <div style="padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);"
+                             [style.background]="q.selectedOption === 'B' ? (q.correctOption === 'B' ? 'rgba(34, 197, 94, 0.25)' : 'rgba(239, 68, 68, 0.25)') : (q.correctOption === 'B' ? 'rgba(34, 197, 94, 0.15)' : 'transparent')"
+                             [style.borderColor]="q.selectedOption === 'B' ? (q.correctOption === 'B' ? '#4ade80' : '#f87171') : (q.correctOption === 'B' ? '#4ade80' : 'rgba(255,255,255,0.05)')">
+                          <strong>B.</strong> {{ q.optionB }}
+                          @if (q.selectedOption === 'B') { <span style="font-size: 10px; font-weight: 700; margin-left: 6px; color: var(--accent-sky);">[Student Choice]</span> }
+                          @if (q.correctOption === 'B') { <span style="font-size: 10px; font-weight: 700; margin-left: 6px; color: #4ade80;">✓ Correct</span> }
+                        </div>
+
+                        <div style="padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);"
+                             [style.background]="q.selectedOption === 'C' ? (q.correctOption === 'C' ? 'rgba(34, 197, 94, 0.25)' : 'rgba(239, 68, 68, 0.25)') : (q.correctOption === 'C' ? 'rgba(34, 197, 94, 0.15)' : 'transparent')"
+                             [style.borderColor]="q.selectedOption === 'C' ? (q.correctOption === 'C' ? '#4ade80' : '#f87171') : (q.correctOption === 'C' ? '#4ade80' : 'rgba(255,255,255,0.05)')">
+                          <strong>C.</strong> {{ q.optionC }}
+                          @if (q.selectedOption === 'C') { <span style="font-size: 10px; font-weight: 700; margin-left: 6px; color: var(--accent-sky);">[Student Choice]</span> }
+                          @if (q.correctOption === 'C') { <span style="font-size: 10px; font-weight: 700; margin-left: 6px; color: #4ade80;">✓ Correct</span> }
+                        </div>
+
+                        <div style="padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);"
+                             [style.background]="q.selectedOption === 'D' ? (q.correctOption === 'D' ? 'rgba(34, 197, 94, 0.25)' : 'rgba(239, 68, 68, 0.25)') : (q.correctOption === 'D' ? 'rgba(34, 197, 94, 0.15)' : 'transparent')"
+                             [style.borderColor]="q.selectedOption === 'D' ? (q.correctOption === 'D' ? '#4ade80' : '#f87171') : (q.correctOption === 'D' ? '#4ade80' : 'rgba(255,255,255,0.05)')">
+                          <strong>D.</strong> {{ q.optionD }}
+                          @if (q.selectedOption === 'D') { <span style="font-size: 10px; font-weight: 700; margin-left: 6px; color: var(--accent-sky);">[Student Choice]</span> }
+                          @if (q.correctOption === 'D') { <span style="font-size: 10px; font-weight: 700; margin-left: 6px; color: #4ade80;">✓ Correct</span> }
+                        </div>
+                      </div>
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+
+            <div style="padding: 12px 24px; border-top: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.02); text-align: right;">
+              <button type="button" class="btn btn-secondary" (click)="closeAnswerReviewModal()">Close</button>
+            </div>
+          </div>
+        </div>
+      }
     </div>
   `
 })
@@ -544,6 +657,9 @@ export class TestWorkspaceComponent implements OnInit {
   qUploadMsg = signal('');
   showSingleQForm = signal(false);
   attemptFilter = 'all';
+  showAnswerReviewModal = signal(false);
+  reviewData = signal<any>(null);
+  isLoadingReview = signal(false);
   serverTime = signal(new Date().toLocaleTimeString());
 
   newQ = { questionText: '', optionA: '', optionB: '', optionC: '', optionD: '', correctAnswer: 'A' };
@@ -787,15 +903,48 @@ export class TestWorkspaceComponent implements OnInit {
     return this.attemptsList();
   }
 
+  async openAnswerReviewModal(att: any): Promise<void> {
+    this.showAnswerReviewModal.set(true);
+    this.isLoadingReview.set(true);
+    this.reviewData.set(null);
+    try {
+      const res = await this.adminService.getAttemptAnswerReview(this.testId, att.id);
+      this.reviewData.set(res);
+    } catch (err: any) {
+      alert(err?.message || 'Failed to load attempt answer review');
+      this.showAnswerReviewModal.set(false);
+    } finally {
+      this.isLoadingReview.set(false);
+    }
+  }
+
+  closeAnswerReviewModal(): void {
+    this.showAnswerReviewModal.set(false);
+    this.reviewData.set(null);
+  }
+
   async openScoreOverrideModal(att: any): Promise<void> {
-    const val = prompt(`Enter override score for ${att.registrationNo || att.registration_no}:`, String(att.score || att.calculatedScore || 0));
+    const regNo = att.registrationNo || att.registration_no;
+    const resList = await this.adminService.getResultsForTest(this.testId);
+    this.resultsList.set(resList);
+    const matchedRes = resList.find((r) => r.registrationNo === regNo);
+
+    const val = prompt(`Enter override score for candidate ${regNo}:`, String(att.score || att.calculatedScore || 0));
     if (val !== null) {
       const newScore = parseFloat(val);
       if (!isNaN(newScore)) {
-        await this.adminService.overrideResultScore(att.id, newScore);
+        if (matchedRes) {
+          await this.adminService.overrideResultScore(matchedRes.id, newScore);
+        } else {
+          await this.adminService.overrideResultScore(att.id, newScore);
+        }
         alert('Score overridden successfully!');
-        const attempts = await this.adminService.getAttemptsForTest(this.testId);
+        const [attempts, results] = await Promise.all([
+          this.adminService.getAttemptsForTest(this.testId),
+          this.adminService.getResultsForTest(this.testId)
+        ]);
         this.attemptsList.set(attempts);
+        this.resultsList.set(results);
       }
     }
   }

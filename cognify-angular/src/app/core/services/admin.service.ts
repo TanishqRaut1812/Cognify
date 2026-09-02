@@ -188,6 +188,16 @@ export class AdminService {
     }
   }
 
+  async getAttemptAnswerReview(testId: number, attemptId: number): Promise<any> {
+    try {
+      const res = await firstValueFrom(this.api.get<any>(`/admin/tests/${testId}/attempts/${attemptId}/answers`));
+      return res;
+    } catch (e) {
+      console.warn(`Failed to fetch answer review for test ${testId} attempt ${attemptId}:`, e);
+      throw e;
+    }
+  }
+
   async getResultsForTest(testId: number): Promise<any[]> {
     try {
       const res = await firstValueFrom(this.api.get<any[]>(`/admin/tests/${testId}/results`));
@@ -197,8 +207,8 @@ export class AdminService {
     }
   }
 
-  async overrideResultScore(attemptId: number, score: number): Promise<any> {
-    return await firstValueFrom(this.api.put<any>(`/admin/attempts/${attemptId}/score`, { score }));
+  async overrideResultScore(resultId: number, marksObtained: number): Promise<any> {
+    return await firstValueFrom(this.api.put<any>(`/admin/results/${resultId}`, { marksObtained }));
   }
 
   // SYLLABUS MANAGEMENT API

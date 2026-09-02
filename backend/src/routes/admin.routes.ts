@@ -1,8 +1,11 @@
 import { Router } from 'express';
 import { requireAdminAuth } from '../middleware/auth.middleware';
 import { uploadSingleFile } from '../middleware/upload.middleware';
-
-import { loginAdminHandler, logoutAdminHandler, getAdminMeHandler } from '../controllers/adminAuth.controller';
+import {
+  loginAdminHandler,
+  logoutAdminHandler,
+  getAdminMeHandler
+} from '../controllers/adminAuth.controller';
 import {
   getStudentsAdminHandler,
   getStudentByIdAdminHandler,
@@ -43,6 +46,7 @@ import {
 import {
   getTestAttemptsAdminHandler,
   getAttemptByIdAdminHandler,
+  getAttemptAnswerReviewAdminHandler,
   getTestResultsAdminHandler,
   getResultByIdAdminHandler,
   overrideStudentScoreAdminHandler
@@ -114,6 +118,7 @@ router.post('/tests/:testId/attendance/bulk', bulkUpdateAttendanceAdminHandler);
 // ATTEMPTS INSPECTION
 router.get('/tests/:testId/attempts', getTestAttemptsAdminHandler);
 router.get('/attempts/:attemptId', getAttemptByIdAdminHandler);
+router.get('/tests/:testId/attempts/:attemptId/answers', getAttemptAnswerReviewAdminHandler);
 
 // RESULT MANAGEMENT & OVERRIDES
 router.get('/tests/:testId/results', getTestResultsAdminHandler);

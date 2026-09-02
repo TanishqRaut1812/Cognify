@@ -1,6 +1,14 @@
 import { Request, Response, NextFunction } from 'express';
-import { getTestAttemptsAdmin, getAttemptByIdAdmin } from '../../services/attemptAdmin.service';
-import { getTestResultsAdmin, getResultByIdAdmin, overrideStudentScoreAdmin } from '../../services/resultAdmin.service';
+import {
+  getTestAttemptsAdmin,
+  getAttemptByIdAdmin,
+  getAttemptAnswerReviewAdmin
+} from '../../services/attemptAdmin.service';
+import {
+  getTestResultsAdmin,
+  getResultByIdAdmin,
+  overrideStudentScoreAdmin
+} from '../../services/resultAdmin.service';
 import { sendSuccess } from '../../utils/apiResponse';
 import { ValidationError } from '../../types/api.types';
 
@@ -21,6 +29,20 @@ export async function getAttemptByIdAdminHandler(req: Request, res: Response, ne
     if (isNaN(attemptId)) throw new ValidationError('Invalid attempt ID');
     const attempt = await getAttemptByIdAdmin(attemptId);
     sendSuccess(res, attempt);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getAttemptAnswerReviewAdminHandler(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const testId = parseInt(req.params.testId, 10);
+    const attemptId = parseInt(req.params.attemptId, 10);
+    if (isNaN(testId) || isNaN(attemptId)) {
+      throw new ValidationError('Invalid test ID or attempt ID');
+    }
+    const review = await getAttemptAnswerReviewAdmin(testId, attemptId);
+    sendSuccess(res, review);
   } catch (err) {
     next(err);
   }
