@@ -9,13 +9,13 @@ export interface AttemptAdminDto {
   studentName?: string;
   startedAt: string;
   submittedAt?: string;
-  attemptStatus: 'Not Started' | 'In Progress' | 'Submitted' | 'Terminated';
-  attendance: 'Present' | 'Absent';
+  attemptStatus: string;
+  attendance?: string;
   fullscreenViolationCount: number;
   violationCount: number;
   cheatingFlag: boolean;
-  score?: number;
-  percentage?: number;
+  score: number;
+  percentage: number;
 }
 
 export async function getTestAttemptsAdmin(testId: number): Promise<AttemptAdminDto[]> {
@@ -43,13 +43,18 @@ export async function getTestAttemptsAdmin(testId: number): Promise<AttemptAdmin
   `;
 
   const res = await query(sql, [testId]);
-  return res.rows.map((r) => ({
-    ...r,
-    startedAt: r.startedAt ? new Date(r.startedAt).toISOString() : new Date().toISOString(),
-    submittedAt: r.submittedAt ? new Date(r.submittedAt).toISOString() : undefined,
-    score: r.score !== null ? parseFloat(r.score) : 0,
-    percentage: r.percentage !== null ? parseFloat(r.percentage) : 0
-  }));
+  return res.rows.map((r) => {
+    const vCount = (r.fullscreenViolationCount !== undefined ? r.fullscreenViolationCount : r.violationCount) || 0;
+    const isTerminated = r.attemptStatus === 'Terminated' || vCount >= 4 || r.cheatingFlag;
+    return {
+      ...r,
+      attemptStatus: isTerminated ? 'Terminated' : r.attemptStatus,
+      startedAt: r.startedAt ? new Date(r.startedAt).toISOString() : new Date().toISOString(),
+      submittedAt: r.submittedAt ? new Date(r.submittedAt).toISOString() : undefined,
+      score: r.score !== null ? parseFloat(r.score) : 0,
+      percentage: r.percentage !== null ? parseFloat(r.percentage) : 0
+    };
+  });
 }
 
 export async function getAttemptByIdAdmin(attemptId: number): Promise<AttemptAdminDto> {
@@ -77,12 +82,16 @@ export async function getAttemptByIdAdmin(attemptId: number): Promise<AttemptAdm
 
   const res = await query(sql, [attemptId]);
   if (res.rows.length === 0) {
-    throw new NotFoundError(`Attempt with ID ${attemptId} not found`);
+    throw new NotFoundError(`Attempt ID ${attemptId} not found`);
   }
 
   const r = res.rows[0];
+  const vCount = (r.fullscreenViolationCount !== undefined ? r.fullscreenViolationCount : r.violationCount) || 0;
+  const isTerminated = r.attemptStatus === 'Terminated' || vCount >= 4 || r.cheatingFlag;
+
   return {
     ...r,
+    attemptStatus: isTerminated ? 'Terminated' : r.attemptStatus,
     startedAt: r.startedAt ? new Date(r.startedAt).toISOString() : new Date().toISOString(),
     submittedAt: r.submittedAt ? new Date(r.submittedAt).toISOString() : undefined,
     score: r.score !== null ? parseFloat(r.score) : 0,

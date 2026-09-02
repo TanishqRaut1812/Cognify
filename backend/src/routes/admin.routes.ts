@@ -37,7 +37,8 @@ import {
 } from '../controllers/admin/fileStorageAdmin.controller';
 import {
   getTestAttendanceAdminHandler,
-  updateStudentAttendanceAdminHandler
+  updateStudentAttendanceAdminHandler,
+  bulkUpdateAttendanceAdminHandler
 } from '../controllers/admin/attendanceAdmin.controller';
 import {
   getTestAttemptsAdminHandler,
@@ -108,6 +109,7 @@ router.delete('/resources/:id', deleteResourceHandler);
 // ATTENDANCE MANAGEMENT
 router.get('/tests/:testId/attendance', getTestAttendanceAdminHandler);
 router.put('/tests/:testId/attendance/:studentId', updateStudentAttendanceAdminHandler);
+router.post('/tests/:testId/attendance/bulk', bulkUpdateAttendanceAdminHandler);
 
 // ATTEMPTS INSPECTION
 router.get('/tests/:testId/attempts', getTestAttemptsAdminHandler);

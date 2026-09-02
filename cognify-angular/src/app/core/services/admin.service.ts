@@ -47,7 +47,11 @@ export class AdminService {
           registration_no: r.registrationNo,
           registrationNo: r.registrationNo,
           student_name: r.studentName,
+          studentName: r.studentName,
           roll_no: r.rollNo || '--',
+          rollNo: r.rollNo || '--',
+          class_name: r.className || 'SY',
+          className: r.className || 'SY',
           status: r.status,
           is_late_attempt: 0,
           updated_at: r.updatedAt
@@ -62,14 +66,22 @@ export class AdminService {
   async overrideAttendance(testId?: number, target?: number | string, newStatus?: 'Present' | 'Absent'): Promise<void> {
     try {
       const tId = testId || 1;
-      let studentId = typeof target === 'number' ? target : parseInt(target as string, 10);
-      if (isNaN(studentId)) studentId = 1;
+      const regNo = String(target || '');
+      if (!regNo) return;
       const status = newStatus || 'Present';
       await firstValueFrom(
-        this.api.put(`/admin/tests/${tId}/attendance/${studentId}`, { status })
+        this.api.put(`/admin/tests/${tId}/attendance/${encodeURIComponent(regNo)}`, { status })
       );
     } catch (e) {
       console.warn('Failed to override attendance:', e);
+    }
+  }
+
+  async bulkUpdateAttendance(testId: number, status: 'Present' | 'Absent'): Promise<void> {
+    try {
+      await firstValueFrom(this.api.post(`/admin/tests/${testId}/attendance/bulk`, { status }));
+    } catch (e) {
+      console.warn('Failed to bulk update attendance:', e);
     }
   }
 

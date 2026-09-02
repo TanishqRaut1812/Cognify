@@ -127,44 +127,57 @@ import { AttendanceRecord, AuditLog, Resource, SyllabusCategory } from '../../..
       <!-- PANE 2: STUDENTS & ATTENDANCE -->
       @if (wsTab() === 'students') {
         <div class="ws-pane">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
             <div>
-              <h4 style="font-size: 16px; margin: 0;">Candidate Class List & Attendance Verification</h4>
-              <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Admin authorized status verification for test eligibility.</p>
+              <h4 style="font-size: 16px; margin: 0;">Candidate Class Roster & Attendance Verification</h4>
+              <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Admin authorized status verification for test eligibility across academic years.</p>
             </div>
-            <button type="button" class="btn btn-secondary btn-sm" (click)="markAllPresent()">Mark All Present</button>
+            <div style="display: flex; gap: 8px;">
+              <button type="button" class="btn btn-secondary btn-sm" (click)="markAllPresent()" [disabled]="isSavingAttendance()">Mark All Present</button>
+              <button type="button" class="btn btn-secondary btn-sm" (click)="markAllAbsent()" [disabled]="isSavingAttendance()">Mark All Absent</button>
+            </div>
           </div>
 
-          <table class="ranking-table" style="width: 100%; border-collapse: collapse;">
-            <thead>
-              <tr style="border-bottom: 1px solid var(--border-subtle); text-align: left;">
-                <th style="padding: 10px;">Registration No</th>
-                <th style="padding: 10px;">Student Name</th>
-                <th style="padding: 10px;">Roll No</th>
-                <th style="padding: 10px;">Status</th>
-                <th style="padding: 10px;">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (att of attendanceList(); track att.registration_no) {
-                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                  <td style="padding: 10px; font-family: monospace; font-weight: 700;">{{ att.registration_no || att.registrationNo }}</td>
-                  <td style="padding: 10px;">{{ att.student_name || att.studentName }}</td>
-                  <td style="padding: 10px;">{{ att.roll_no || att.rollNo || '--' }}</td>
-                  <td style="padding: 10px;">
-                    <span class="timeline-tag" [class.tag-current]="att.status === 'Present'" [class.tag-upcoming]="att.status !== 'Present'">
-                      {{ att.status }}
-                    </span>
-                  </td>
-                  <td style="padding: 10px;">
-                    <button type="button" class="btn btn-secondary btn-sm" (click)="toggleAttendance(att)">
-                      Toggle {{ att.status === 'Present' ? 'Absent' : 'Present' }}
-                    </button>
-                  </td>
-                </tr>
-              }
-            </tbody>
-          </table>
+          @for (cls of ['SY', 'TY', 'Final Year']; track cls) {
+            @if (getStudentsByClass(cls).length > 0) {
+              <div style="margin-bottom: 24px;">
+                <div style="font-weight: 800; font-size: 14px; color: var(--accent-sky); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 6px;">
+                  <span>Academic Year: {{ cls }}</span>
+                  <span style="font-size: 12px; color: var(--text-muted); font-weight: normal;">({{ getStudentsByClass(cls).length }} candidates)</span>
+                </div>
+                <table class="ranking-table" style="width: 100%; border-collapse: collapse; margin-bottom: 12px;">
+                  <thead>
+                    <tr style="border-bottom: 1px solid var(--border-subtle); text-align: left;">
+                      <th style="padding: 10px;">Registration No</th>
+                      <th style="padding: 10px;">Student Name</th>
+                      <th style="padding: 10px;">Roll No</th>
+                      <th style="padding: 10px;">Status</th>
+                      <th style="padding: 10px; width: 140px;">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (att of getStudentsByClass(cls); track (att.registration_no || att.registrationNo)) {
+                      <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                        <td style="padding: 10px; font-family: monospace; font-weight: 700;">{{ att.registration_no || att.registrationNo }}</td>
+                        <td style="padding: 10px;">{{ att.student_name || att.studentName }}</td>
+                        <td style="padding: 10px;">{{ att.roll_no || att.rollNo || '--' }}</td>
+                        <td style="padding: 10px;">
+                          <span class="timeline-tag" [class.tag-current]="att.status === 'Present'" [class.tag-upcoming]="att.status !== 'Present'">
+                            {{ att.status }}
+                          </span>
+                        </td>
+                        <td style="padding: 10px;">
+                          <button type="button" class="btn btn-secondary btn-sm" [disabled]="isSavingAttendance()" (click)="toggleAttendance(att)">
+                            Mark {{ att.status === 'Present' ? 'Absent' : 'Present' }}
+                          </button>
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            }
+          }
         </div>
       }
 
@@ -707,21 +720,54 @@ export class TestWorkspaceComponent implements OnInit {
     }
   }
 
-  async markAllPresent(): Promise<void> {
-    for (const a of this.attendanceList()) {
-      if (a.status !== 'Present') {
-        await this.adminService.overrideAttendance(this.testId, a.registration_no || a.registrationNo, 'Present');
+  isSavingAttendance = signal(false);
+
+  getStudentsByClass(className: string) {
+    return this.attendanceList().filter((a: any) => {
+      const cls = (a.className || a.class_name || 'SY').trim().toUpperCase();
+      const target = className.trim().toUpperCase();
+      if (target === 'FINAL YEAR') {
+        return cls === 'FINAL YEAR' || cls === 'FINAL' || cls === 'BE' || cls === 'LY';
       }
+      return cls === target;
+    });
+  }
+
+  async markAllPresent(): Promise<void> {
+    if (this.isSavingAttendance()) return;
+    this.isSavingAttendance.set(true);
+    try {
+      await this.adminService.bulkUpdateAttendance(this.testId, 'Present');
+      const att = await this.adminService.getAttendance(this.testId);
+      this.attendanceList.set(att);
+    } finally {
+      this.isSavingAttendance.set(false);
     }
-    const att = await this.adminService.getAttendance(this.testId);
-    this.attendanceList.set(att);
+  }
+
+  async markAllAbsent(): Promise<void> {
+    if (this.isSavingAttendance()) return;
+    this.isSavingAttendance.set(true);
+    try {
+      await this.adminService.bulkUpdateAttendance(this.testId, 'Absent');
+      const att = await this.adminService.getAttendance(this.testId);
+      this.attendanceList.set(att);
+    } finally {
+      this.isSavingAttendance.set(false);
+    }
   }
 
   async toggleAttendance(att: AttendanceRecord): Promise<void> {
-    const next = att.status === 'Present' ? 'Absent' : 'Present';
-    await this.adminService.overrideAttendance(this.testId, att.registration_no || att.registrationNo, next);
-    const updated = await this.adminService.getAttendance(this.testId);
-    this.attendanceList.set(updated);
+    if (this.isSavingAttendance()) return;
+    this.isSavingAttendance.set(true);
+    try {
+      const next = att.status === 'Present' ? 'Absent' : 'Present';
+      await this.adminService.overrideAttendance(this.testId, att.registration_no || att.registrationNo, next);
+      const updated = await this.adminService.getAttendance(this.testId);
+      this.attendanceList.set(updated);
+    } finally {
+      this.isSavingAttendance.set(false);
+    }
   }
 
   getFilteredAttempts(): any[] {

@@ -7,9 +7,10 @@ import { ValidationError } from '../types/api.types';
 export interface AttendanceAdminDto {
   id?: number;
   testId: number;
-  studentId: number | string;
+  studentId: string;
   registrationNo: string;
   studentName: string;
+  rollNo?: string;
   className: string;
   status: 'Present' | 'Absent';
   updatedAt?: string;
@@ -17,33 +18,36 @@ export interface AttendanceAdminDto {
 }
 
 export async function getTestAttendanceAdmin(testId: number): Promise<AttendanceAdminDto[]> {
-  const test = await getAdminTestById(testId);
+  await getAdminTestById(testId);
 
-  // Fetch all students for the test's class along with attendance records
   const sql = `
     SELECT 
-      st.id AS "studentId",
       st.registration_no AS "registrationNo",
       st.name AS "studentName",
+      st.roll_no AS "rollNo",
       st.class_name AS "className",
-      COALESCE(att.status, 'Absent') AS status,
+      COALESCE(att.status, sa.attendance, 'Absent') AS status,
       att.id AS id,
       att.updated_at AS "updatedAt",
       att.updated_by AS "updatedBy"
     FROM students st
-    LEFT JOIN attendance att ON att.student_id = st.id AND att.test_id = $1
-    WHERE st.class_id = $2 OR st.class_name = $3
-    ORDER BY st.registration_no ASC;
+    LEFT JOIN attendance att ON att.registration_no = st.registration_no AND att.test_id = $1
+    LEFT JOIN student_attempts sa ON sa.registration_no = st.registration_no AND sa.test_id = $1
+    ORDER BY 
+      CASE WHEN st.class_name = 'SY' THEN 1 WHEN st.class_name = 'TY' THEN 2 ELSE 3 END,
+      st.roll_no ASC,
+      st.registration_no ASC;
   `;
 
-  const res = await query(sql, [testId, test.classId, test.className]);
+  const res = await query(sql, [testId]);
   return res.rows.map((r) => ({
     id: r.id || undefined,
     testId,
-    studentId: r.studentId,
+    studentId: r.registrationNo,
     registrationNo: r.registrationNo,
     studentName: r.studentName,
-    className: r.className,
+    rollNo: r.rollNo || '--',
+    className: r.className || 'SY',
     status: r.status as 'Present' | 'Absent',
     updatedAt: r.updatedAt,
     updatedBy: r.updatedBy
@@ -52,34 +56,34 @@ export async function getTestAttendanceAdmin(testId: number): Promise<Attendance
 
 export async function updateStudentAttendanceAdmin(
   testId: number,
-  studentId: number | string,
+  registrationNo: string,
   status: 'Present' | 'Absent'
 ): Promise<AttendanceAdminDto> {
   const newStatus = status === 'Present' ? 'Present' : 'Absent';
-  const student = await getStudentByIdAdmin(studentId);
+  const regNo = String(registrationNo).trim().toUpperCase();
+  const student = await getStudentByIdAdmin(regNo);
 
-  // Upsert attendance record using unique constraint (test_id, registration_no)
   const sql = `
-    INSERT INTO attendance (test_id, student_id, registration_no, status, updated_at, updated_by)
-    VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, 'Admin')
+    INSERT INTO attendance (test_id, registration_no, status, updated_at, updated_by)
+    VALUES ($1, $2, $3, CURRENT_TIMESTAMP, 'Admin')
     ON CONFLICT (test_id, registration_no)
     DO UPDATE SET 
       status = EXCLUDED.status,
       updated_at = CURRENT_TIMESTAMP,
       updated_by = 'Admin'
-    RETURNING id, test_id AS "testId", student_id AS "studentId", registration_no AS "registrationNo", status, updated_at AS "updatedAt", updated_by AS "updatedBy";
+    RETURNING id, test_id AS "testId", registration_no AS "registrationNo", status, updated_at AS "updatedAt", updated_by AS "updatedBy";
   `;
 
-  const res = await query(sql, [testId, studentId, student.registrationNo, newStatus]);
+  const res = await query(sql, [testId, regNo, newStatus]);
 
-  // Sync attendance into test_results if a result record exists for this student & test
   await query(
-    `
-    UPDATE test_results
-    SET attendance = $1, updated_at = CURRENT_TIMESTAMP, updated_by = 'Admin'
-    WHERE test_id = $2 AND (student_id = $3 OR registration_no = $4);
-  `,
-    [newStatus, testId, studentId, student.registrationNo]
+    `UPDATE student_attempts SET attendance = $1 WHERE test_id = $2 AND registration_no = $3`,
+    [newStatus, testId, regNo]
+  );
+
+  await query(
+    `UPDATE test_results SET attendance = $1 WHERE test_id = $2 AND registration_no = $3`,
+    [newStatus, testId, regNo]
   );
 
   await createAuditLog({
@@ -87,19 +91,47 @@ export async function updateStudentAttendanceAdmin(
     entityType: 'attendance',
     entityId: res.rows[0].id,
     testId,
-    registrationNo: student.registrationNo,
-    details: `Admin set attendance for student ${student.registrationNo} to ${newStatus}`
+    registrationNo: regNo,
+    details: `Admin set attendance for candidate ${regNo} to ${newStatus}`
   });
 
   return {
     id: res.rows[0].id,
     testId,
-    studentId,
-    registrationNo: student.registrationNo,
+    studentId: regNo,
+    registrationNo: regNo,
     studentName: student.name,
     className: student.className,
     status: newStatus,
     updatedAt: res.rows[0].updatedAt,
     updatedBy: res.rows[0].updatedBy
   };
+}
+
+export async function bulkUpdateAttendanceAdmin(
+  testId: number,
+  status: 'Present' | 'Absent'
+): Promise<{ count: number; status: 'Present' | 'Absent' }> {
+  const newStatus = status === 'Present' ? 'Present' : 'Absent';
+
+  const res = await query(
+    `INSERT INTO attendance (test_id, registration_no, status, updated_at, updated_by)
+     SELECT $1, registration_no, $2, CURRENT_TIMESTAMP, 'Admin' FROM students
+     ON CONFLICT (test_id, registration_no)
+     DO UPDATE SET status = EXCLUDED.status, updated_at = CURRENT_TIMESTAMP, updated_by = 'Admin'
+     RETURNING registration_no;`,
+    [testId, newStatus]
+  );
+
+  await query(`UPDATE student_attempts SET attendance = $1 WHERE test_id = $2`, [newStatus, testId]);
+  await query(`UPDATE test_results SET attendance = $1 WHERE test_id = $2`, [newStatus, testId]);
+
+  await createAuditLog({
+    action: 'BULK_UPDATE_ATTENDANCE',
+    entityType: 'attendance',
+    testId,
+    details: `Admin bulk updated all candidate attendance for test ${testId} to ${newStatus}`
+  });
+
+  return { count: res.rows.length, status: newStatus };
 }

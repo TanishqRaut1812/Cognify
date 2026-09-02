@@ -1,19 +1,23 @@
-<app-navbar (openAdminModal)="showAdminModal.set(true)"></app-navbar>
+@if (!isExamRoute()) {
+  <app-navbar (openAdminModal)="showAdminModal.set(true)"></app-navbar>
+}
 
 <main class="main-content">
   <router-outlet></router-outlet>
 </main>
 
-<footer class="site-footer">
-  <div class="container footer-content">
-    <div>
-      <span class="footer-tag">COGNIFY 2026</span> &bull; Information Technology Student Association (ITSA)
+@if (!isExamRoute()) {
+  <footer class="site-footer">
+    <div class="container footer-content">
+      <div>
+        <span class="footer-tag">COGNIFY 2026</span> &bull; Information Technology Student Association (ITSA)
+      </div>
+      <div style="font-size: 12px; color: var(--text-muted);">
+        Official Assessment & Leaderboard Engine
+      </div>
     </div>
-    <div style="font-size: 12px; color: var(--text-muted);">
-      Official Assessment & Leaderboard Engine
-    </div>
-  </div>
-</footer>
+  </footer>
+}
 
 @if (showAdminModal()) {
   <app-admin-login-modal (closeModal)="showAdminModal.set(false)"></app-admin-login-modal>

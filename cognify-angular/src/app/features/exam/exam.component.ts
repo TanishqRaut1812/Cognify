@@ -132,7 +132,11 @@ import { SubmissionReviewModalComponent } from './submission-review-modal.compon
 
                   <div style="display: flex; justify-content: space-between; margin-top: 24px;">
                     <button type="button" class="btn btn-secondary btn-sm" [disabled]="exam.currentQuestionIndex === 0" (click)="prevQ()">Previous</button>
-                    <button type="button" class="btn btn-primary btn-sm" [disabled]="exam.currentQuestionIndex === exam.questions.length - 1" (click)="nextQ()">Next Question</button>
+                    @if (exam.currentQuestionIndex < exam.questions.length - 1) {
+                      <button type="button" class="btn btn-primary btn-sm" (click)="nextQ()">Next Question</button>
+                    } @else {
+                      <button type="button" class="btn btn-primary btn-sm" (click)="showReviewModal.set(true)">Review & Submit</button>
+                    }
                   </div>
                 </div>
               }
@@ -176,6 +180,7 @@ import { SubmissionReviewModalComponent } from './submission-review-modal.compon
           <app-submission-review-modal
             [questions]="exam.questions"
             [answers]="exam.answers"
+            [isSubmitting]="isSubmitting()"
             (closeModal)="showReviewModal.set(false)"
             (selectQuestion)="jumpTo($event)"
             (confirmSubmit)="finalSubmit()">
@@ -231,6 +236,7 @@ export class ExamComponent implements OnInit {
   regNoInput = '';
   errorMessage = signal('');
   isLoading = signal(false);
+  isSubmitting = signal(false);
   showReviewModal = signal(false);
   showFullscreenWarning = signal(false);
   currentViolationCount = signal(0);
@@ -371,9 +377,17 @@ export class ExamComponent implements OnInit {
     }
   }
 
-  finalSubmit(): void {
-    this.showReviewModal.set(false);
-    this.examService.submitExam('Final submission after review');
+  async finalSubmit(): Promise<void> {
+    if (this.isSubmitting()) return;
+    this.isSubmitting.set(true);
+    try {
+      await this.examService.submitExam('Final submission after review');
+    } catch (e) {
+      console.error('Final submit failed:', e);
+    } finally {
+      this.isSubmitting.set(false);
+      this.showReviewModal.set(false);
+    }
   }
 
   formatTimer(seconds: number): string {

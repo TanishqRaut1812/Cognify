@@ -17,7 +17,7 @@ import { StudentExamQuestion } from '../../core/models/cognify.models';
             <h3 class="modal-title">Review Candidate Submission</h3>
             <p class="modal-subtitle">Verify your selected choices before final submission. Click a row to return to that question.</p>
           </div>
-          <button type="button" class="modal-close" (click)="closeModal.emit()">&times;</button>
+          <button type="button" class="modal-close" [disabled]="isSubmitting" (click)="closeModal.emit()">&times;</button>
         </div>
 
         <div class="modal-body" style="max-height: 380px; overflow-y: auto;">
@@ -45,7 +45,7 @@ import { StudentExamQuestion } from '../../core/models/cognify.models';
                     {{ answers[q.id] || '--' }}
                   </td>
                   <td>
-                    <button type="button" class="btn btn-secondary btn-sm" (click)="onRowClick(idx); $event.stopPropagation()">Jump</button>
+                    <button type="button" class="btn btn-secondary btn-sm" [disabled]="isSubmitting" (click)="onRowClick(idx); $event.stopPropagation()">Jump</button>
                   </td>
                 </tr>
               }
@@ -57,8 +57,10 @@ import { StudentExamQuestion } from '../../core/models/cognify.models';
           </div>
 
           <div class="modal-actions">
-            <button type="button" class="btn btn-secondary" (click)="closeModal.emit()">Back to Test</button>
-            <button type="button" class="btn btn-primary" (click)="confirmSubmit.emit()">Confirm & Submit Test</button>
+            <button type="button" class="btn btn-secondary" [disabled]="isSubmitting" (click)="closeModal.emit()">Back to Test</button>
+            <button type="button" class="btn btn-primary" [disabled]="isSubmitting" (click)="confirmSubmit.emit()">
+              {{ isSubmitting ? 'Submitting Test...' : 'Confirm & Submit Test' }}
+            </button>
           </div>
         </div>
       </div>
@@ -68,12 +70,14 @@ import { StudentExamQuestion } from '../../core/models/cognify.models';
 export class SubmissionReviewModalComponent {
   @Input() questions: StudentExamQuestion[] = [];
   @Input() answers: { [qId: number]: 'A' | 'B' | 'C' | 'D' | '' } = {};
+  @Input() isSubmitting = false;
 
   @Output() closeModal = new EventEmitter<void>();
   @Output() confirmSubmit = new EventEmitter<void>();
   @Output() selectQuestion = new EventEmitter<number>();
 
   onRowClick(index: number): void {
+    if (this.isSubmitting) return;
     this.selectQuestion.emit(index);
     this.closeModal.emit();
   }
