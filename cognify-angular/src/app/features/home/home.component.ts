@@ -226,7 +226,8 @@ export class HomeComponent implements OnInit {
   }
 
   getCurrentTabRankings(): StudentScore[] {
-    return this.rankings()[this.activeTab()] || [];
+    const list = this.rankings()[this.activeTab()] || [];
+    return list.slice(0, 10);
   }
 
   getRankClass(rank: number): string {
