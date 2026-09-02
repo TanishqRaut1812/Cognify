@@ -109,6 +109,14 @@ import { Test, DashboardStats, AuditLog, BackupRecord, AttendanceRecord, Student
                 <input type="number" [(ngModel)]="newTest.total_marks" name="total_marks" required>
               </div>
               <div class="form-group">
+                <label>Start Time</label>
+                <input type="text" [(ngModel)]="newTest.start_time" name="start_time" placeholder="e.g. 5:15 PM" required>
+              </div>
+              <div class="form-group">
+                <label>Finish Time</label>
+                <input type="text" [(ngModel)]="newTest.finish_time" name="finish_time" placeholder="e.g. 6:15 PM" required>
+              </div>
+              <div class="form-group">
                 <label>Status</label>
                 <select [(ngModel)]="newTest.status" name="status">
                   <option value="Upcoming">Upcoming</option>
@@ -137,10 +145,10 @@ import { Test, DashboardStats, AuditLog, BackupRecord, AttendanceRecord, Student
               <tbody>
                 @for (t of tests(); track t.id) {
                   <tr>
-                    <td style="font-family: monospace; font-weight: 700;">{{ t.test_number }}</td>
-                    <td>{{ t.test_name }}</td>
-                    <td>{{ t.test_date }}</td>
-                    <td>{{ t.total_marks }}</td>
+                    <td style="font-family: monospace; font-weight: 700;">{{ t.test_number || t.testNumber }}</td>
+                    <td>{{ t.test_name || t.title }}</td>
+                    <td>{{ t.test_date || t.testDate }}</td>
+                    <td>{{ t.total_marks || t.totalMarks }}</td>
                     <td><span class="timeline-tag" [ngClass]="t.status === 'Current' ? 'tag-current' : 'tag-completed'">{{ t.status }}</span></td>
                     <td>
                       <button type="button" class="btn btn-secondary btn-sm" (click)="openWorkspace(t)">Open Workspace</button>
@@ -574,7 +582,9 @@ export class AdminDashboardComponent implements OnInit {
     test_date: '',
     total_marks: 50,
     status: 'Upcoming',
-    duration_minutes: 60
+    duration_minutes: 60,
+    start_time: '5:15 PM',
+    finish_time: '6:15 PM'
   };
 
   async ngOnInit(): Promise<void> {
@@ -696,8 +706,8 @@ export class AdminDashboardComponent implements OnInit {
           title: this.newTest.test_name,
           className: 'SY',
           testDate: this.newTest.test_date,
-          startTime: '10:00 AM',
-          finishTime: '11:00 AM',
+          startTime: this.newTest.start_time || '5:15 PM',
+          finishTime: this.newTest.finish_time || '6:15 PM',
           durationMinutes: Number(this.newTest.duration_minutes || 60),
           totalMarks: Number(this.newTest.total_marks || 50),
           status: this.newTest.status || 'Upcoming'
@@ -707,20 +717,35 @@ export class AdminDashboardComponent implements OnInit {
         const newTestItem: Test = {
           id: created.id,
           test_number: created.testNumber || this.newTest.test_number,
+          testNumber: created.testNumber || this.newTest.test_number,
           test_name: created.title || this.newTest.test_name,
+          title: created.title || this.newTest.test_name,
           test_date: created.testDate || this.newTest.test_date,
+          testDate: created.testDate || this.newTest.test_date,
           total_marks: created.totalMarks || this.newTest.total_marks || 50,
+          totalMarks: created.totalMarks || this.newTest.total_marks || 50,
           status: created.status || 'Upcoming',
           is_published: 0,
           duration_minutes: created.durationMinutes || 60,
           instructions: '',
-          start_time: '10:00 AM',
-          finish_time: '11:00 AM'
+          start_time: created.startTime || this.newTest.start_time || '5:15 PM',
+          startTime: created.startTime || this.newTest.start_time || '5:15 PM',
+          finish_time: created.finishTime || this.newTest.finish_time || '6:15 PM',
+          finishTime: created.finishTime || this.newTest.finish_time || '6:15 PM'
         };
 
         this.tests.set([...this.tests(), newTestItem]);
         alert('Test Series created successfully in database!');
-        this.newTest = { test_number: '', test_name: '', test_date: '', total_marks: 50, status: 'Upcoming', duration_minutes: 60 };
+        this.newTest = {
+          test_number: '',
+          test_name: '',
+          test_date: '',
+          total_marks: 50,
+          status: 'Upcoming',
+          duration_minutes: 60,
+          start_time: '5:15 PM',
+          finish_time: '6:15 PM'
+        };
         this.router.navigate(['/admin/test', created.id]);
       } catch (err: any) {
         alert(`Failed to create test: ${err?.message || 'Server error'}`);

@@ -71,7 +71,7 @@ export class LeaderboardService {
 
   async getTimeline(): Promise<TimelineData> {
     try {
-      const tests = await firstValueFrom(this.api.get<Test[]>('/tests'));
+      const tests = await this.getAllTests();
       if (tests && tests.length > 0) {
         const previous = tests.filter((t: Test) => t.status === 'Completed').pop() || null;
         const current = tests.find((t: Test) => t.status === 'Current') || null;
@@ -84,11 +84,34 @@ export class LeaderboardService {
 
   async getAllTests(): Promise<Test[]> {
     try {
-      const tests = await firstValueFrom(this.api.get<Test[]>('/tests'));
-      return tests || [];
+      const tests = await firstValueFrom(this.api.get<any[]>('/tests'));
+      if (tests && Array.isArray(tests)) {
+        return tests.map((t) => ({
+          id: t.id,
+          test_number: t.testNumber || t.test_number || `TEST-${t.id}`,
+          testNumber: t.testNumber || t.test_number,
+          title: t.title || t.test_name,
+          test_name: t.title || t.test_name,
+          test_date: t.testDate || t.test_date || '',
+          testDate: t.testDate || t.test_date || '',
+          start_time: t.startTime || t.start_time || '5:15 PM',
+          startTime: t.startTime || t.start_time || '5:15 PM',
+          finish_time: t.finishTime || t.finish_time || '6:15 PM',
+          finishTime: t.finishTime || t.finish_time || '6:15 PM',
+          duration_minutes: t.durationMinutes || t.duration_minutes || 60,
+          durationMinutes: t.durationMinutes || t.duration_minutes || 60,
+          total_marks: t.totalMarks || t.total_marks || 50,
+          totalMarks: t.totalMarks || t.total_marks || 50,
+          status: t.status,
+          result_status: t.resultStatus || (t.isPublished ? 'Published' : 'Unpublished'),
+          is_published: t.isPublished || t.is_published ? 1 : 0,
+          instructions: t.instructions || ''
+        }));
+      }
     } catch (e) {
-      return [];
+      console.warn('Failed to fetch tests:', e);
     }
+    return [];
   }
 
   async getCurrentPrep(): Promise<CurrentPrepData> {
