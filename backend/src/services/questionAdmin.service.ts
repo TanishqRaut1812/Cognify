@@ -224,15 +224,22 @@ export async function importQuestionsFromExcel(
   const headerRow = worksheet.getRow(1);
   const headers: string[] = [];
   headerRow.eachCell((cell, colNumber) => {
-    headers[colNumber] = String(cell.value || '').trim().toLowerCase();
+    headers[colNumber] = String(cell.value || '')
+      .trim()
+      .toLowerCase()
+      .replace(/_/g, ' ')
+      .replace(/\s+/g, ' ');
   });
 
-  const qTextCol = headers.findIndex((h) => h && (h.includes('question') || h.includes('qtext')));
+  const qTextCol = headers.findIndex(
+    (h) => h && ((h.includes('question') && !h.includes('number') && !h.includes('num') && !h.includes('no') && !h.includes('#')) || h.includes('qtext'))
+  );
   const optACol = headers.findIndex((h) => h && (h.includes('option a') || h.includes('opt a') || h === 'a'));
   const optBCol = headers.findIndex((h) => h && (h.includes('option b') || h.includes('opt b') || h === 'b'));
   const optCCol = headers.findIndex((h) => h && (h.includes('option c') || h.includes('opt c') || h === 'c'));
   const optDCol = headers.findIndex((h) => h && (h.includes('option d') || h.includes('opt d') || h === 'd'));
   const ansCol = headers.findIndex((h) => h && (h.includes('answer') || h.includes('correct')));
+  const marksCol = headers.findIndex((h) => h && h.includes('mark'));
 
   if (qTextCol === -1 || optACol === -1 || optBCol === -1 || optCCol === -1 || optDCol === -1 || ansCol === -1) {
     throw new ValidationError('Excel missing required columns: Question, Option A, Option B, Option C, Option D, Correct Answer');
@@ -246,6 +253,7 @@ export async function importQuestionsFromExcel(
     optC: string;
     optD: string;
     ans: string;
+    marks: number;
   }> = [];
 
   const errors: string[] = [];
@@ -263,9 +271,18 @@ export async function importQuestionsFromExcel(
     let ans = String(row.getCell(ansCol).value || '').trim().toUpperCase();
 
     if (ans.length > 1) {
-      const match = ans.match(/^[A-D]/i);
-      if (match) ans = match[0].toUpperCase();
+      const startMatch = ans.match(/^[A-D]\b/i) || ans.match(/^[A-D][\s.\-_)]/i);
+      if (startMatch) {
+        ans = startMatch[0][0].toUpperCase();
+      } else {
+        const optMatch = ans.match(/(?:OPTION|OPT)[\s_]*([A-D])\b/i) || ans.match(/\b([A-D])\b/i);
+        if (optMatch) ans = optMatch[1].toUpperCase();
+      }
     }
+
+    const rawMarks = marksCol !== -1 ? String(row.getCell(marksCol).value || '').trim() : '';
+    const parsedMarks = rawMarks ? parseFloat(rawMarks) : 1.0;
+    const marks = isNaN(parsedMarks) ? 1.0 : parsedMarks;
 
     if (!qText || !optA || !optB || !optC || !optD || !['A', 'B', 'C', 'D'].includes(ans)) {
       invalidCount++;
@@ -280,7 +297,8 @@ export async function importQuestionsFromExcel(
       optB,
       optC,
       optD,
-      ans
+      ans,
+      marks
     });
   });
 
@@ -293,9 +311,9 @@ export async function importQuestionsFromExcel(
         INSERT INTO questions (
           test_id, question_number, question_text, option_a, option_b, option_c, option_d,
           correct_answer, correct_option, marks, is_active
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, 1.0, 1);
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $9, 1);
       `,
-        [testId, item.qNum, item.qText, item.optA, item.optB, item.optC, item.optD, item.ans]
+        [testId, item.qNum, item.qText, item.optA, item.optB, item.optC, item.optD, item.ans, item.marks]
       );
       insertedCount++;
     }

@@ -69,34 +69,122 @@ export class ExcelService {
     const errors: string[] = [];
     const data: QuestionRow[] = [];
 
+    if (!rows || rows.length === 0) {
+      return { valid: false, data: [], errors: ['Excel file contains no rows'] };
+    }
+
+    const rawKeys = Object.keys(rows[0] || {});
+    const normalizeHeader = (h: string) =>
+      String(h || '').trim().toLowerCase().replace(/_/g, ' ').replace(/\s+/g, ' ');
+
+    const normalizedMap = new Map<string, string>();
+    for (const key of rawKeys) {
+      normalizedMap.set(normalizeHeader(key), key);
+    }
+
+    const findKey = (matchers: ((norm: string) => boolean)[]): string | undefined => {
+      for (const [norm, raw] of normalizedMap.entries()) {
+        if (matchers.some((m) => m(norm))) {
+          return raw;
+        }
+      }
+      return undefined;
+    };
+
+    const qTextKey = findKey([
+      (k) => k === 'question text' || k === 'qtext' || k === 'question',
+      (k) => (k.includes('question') || k.includes('qtext')) && !k.includes('number') && !k.includes('num') && !k.includes('no') && !k.includes('#')
+    ]);
+
+    const optAKey = findKey([
+      (k) => k === 'option a' || k === 'opt a' || k === 'a',
+      (k) => k.includes('option a') || k.includes('opt a')
+    ]);
+
+    const optBKey = findKey([
+      (k) => k === 'option b' || k === 'opt b' || k === 'b',
+      (k) => k.includes('option b') || k.includes('opt b')
+    ]);
+
+    const optCKey = findKey([
+      (k) => k === 'option c' || k === 'opt c' || k === 'c',
+      (k) => k.includes('option c') || k.includes('opt c')
+    ]);
+
+    const optDKey = findKey([
+      (k) => k === 'option d' || k === 'opt d' || k === 'd',
+      (k) => k.includes('option d') || k.includes('opt d')
+    ]);
+
+    const correctKey = findKey([
+      (k) => k === 'correct option' || k === 'correct answer' || k === 'correct' || k === 'answer' || k === 'ans',
+      (k) => k.includes('correct') || k.includes('answer')
+    ]);
+
+    const marksKey = findKey([
+      (k) => k === 'marks' || k === 'mark',
+      (k) => k.includes('mark')
+    ]);
+
+    const qNumKey = findKey([
+      (k) => k === 'question number' || k === 'q no' || k === 'qno' || k === 'q num' || k === 'qnum',
+      (k) => k.includes('question') && (k.includes('number') || k.includes('num') || k.includes('no') || k.includes('#'))
+    ]);
+
+    if (!qTextKey || !optAKey || !optBKey || !optCKey || !optDKey || !correctKey) {
+      return {
+        valid: false,
+        data: [],
+        errors: ['Excel missing required columns: Question, Option A, Option B, Option C, Option D, Correct Answer']
+      };
+    }
+
     rows.forEach((row, idx) => {
-      const qNum = parseInt(row['Question Number'] || row['q_no'] || (idx + 1));
-      const qText = row['Question Text'] || row['question'] || '';
-      const optA = row['Option A'] || row['option_a'] || '';
-      const optB = row['Option B'] || row['option_b'] || '';
-      const optC = row['Option C'] || row['option_c'] || '';
-      const optD = row['Option D'] || row['option_d'] || '';
-      let correct = String(row['Correct Option'] || row['correct'] || '').trim().toUpperCase();
-      const marks = parseFloat(row['Marks'] || row['marks'] || '1.0');
+      const qNumRaw = qNumKey ? parseInt(String(row[qNumKey] || ''), 10) : NaN;
+      const qNum = !isNaN(qNumRaw) ? qNumRaw : idx + 1;
+      const qText = String(row[qTextKey] || '').trim();
+      const optA = String(row[optAKey] || '').trim();
+      const optB = String(row[optBKey] || '').trim();
+      const optC = String(row[optCKey] || '').trim();
+      const optD = String(row[optDKey] || '').trim();
+
+      let correct = String(row[correctKey] || '').trim().toUpperCase();
+      if (correct.length > 1) {
+        const startMatch = correct.match(/^[A-D]\b/i) || correct.match(/^[A-D][\s.\-_)]/i);
+        if (startMatch) {
+          correct = startMatch[0][0].toUpperCase();
+        } else {
+          const optMatch = correct.match(/(?:OPTION|OPT)[\s_]*([A-D])\b/i) || correct.match(/\b([A-D])\b/i);
+          if (optMatch) correct = optMatch[1].toUpperCase();
+        }
+      }
+
+      const rawMarks = marksKey ? row[marksKey] : undefined;
+      const parsedMarks = rawMarks !== undefined && rawMarks !== null && String(rawMarks).trim() !== '' ? parseFloat(String(rawMarks)) : 1.0;
+      const marks = isNaN(parsedMarks) ? 1.0 : parsedMarks;
+
+      let rowValid = true;
 
       if (!['A', 'B', 'C', 'D'].includes(correct)) {
         errors.push(`Row ${idx + 2}: Correct option must be A, B, C, or D`);
+        rowValid = false;
       }
 
       if (!qText || !optA || !optB || !optC || !optD) {
         errors.push(`Row ${idx + 2}: Missing question text or options`);
+        rowValid = false;
       }
 
-      if (errors.length === 0) {
+      if (rowValid) {
         data.push({
           question_number: qNum,
-          question_text: String(qText).trim(),
-          option_a: String(optA).trim(),
-          option_b: String(optB).trim(),
-          option_c: String(optC).trim(),
-          option_d: String(optD).trim(),
+          question_text: qText,
+          option_a: optA,
+          option_b: optB,
+          option_c: optC,
+          option_d: optD,
           correct_option: correct as 'A' | 'B' | 'C' | 'D',
-          marks: isNaN(marks) ? 1.0 : marks
+          marks
         });
       }
     });

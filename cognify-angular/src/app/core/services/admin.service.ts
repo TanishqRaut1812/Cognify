@@ -18,6 +18,12 @@ export class AdminService {
     return await firstValueFrom(this.api.post<any>('/admin/students/import', formData));
   }
 
+  async uploadQuestionExcel(testId: number, file: File): Promise<any> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return await firstValueFrom(this.api.post<any>(`/admin/tests/${testId}/questions/import`, formData));
+  }
+
   async getDashboardStats(): Promise<DashboardStats> {
     try {
       const res = await firstValueFrom(this.api.get<any>('/admin/dashboard'));

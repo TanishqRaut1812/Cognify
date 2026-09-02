@@ -831,13 +831,27 @@ export class AdminDashboardComponent implements OnInit {
 
   async onQuestionFileSelected(event: any): Promise<void> {
     const file = event.target.files[0];
-    if (file) {
-      const res = await this.excelService.validateAndParseQuestions(file);
-      if (res.valid) {
-        this.qUploadMsg.set(`Successfully validated ${res.data.length} questions. Generated Question Version 2 for historic attempt reproducibility.`);
-      } else {
-        this.qUploadMsg.set(`Validation errors: ${res.errors.join('; ')}`);
-      }
+    if (!file) return;
+
+    const res = await this.excelService.validateAndParseQuestions(file);
+    if (!res.valid) {
+      this.qUploadMsg.set(`Validation errors: ${res.errors.join('; ')}`);
+      return;
+    }
+
+    try {
+      const testId = this.selectedWorkspaceTest()?.id || 1;
+      this.qUploadMsg.set(`Validated ${res.data.length} questions locally. Uploading to database...`);
+      const serverRes = await this.adminService.uploadQuestionExcel(testId, file);
+      const inserted = serverRes?.inserted !== undefined ? serverRes.inserted : res.data.length;
+
+      const logs = await this.adminService.getAuditLogs();
+      this.auditLogs.set(logs);
+
+      this.qUploadMsg.set(`Successfully imported ${inserted} questions into database. Generated Question Version 2 for historic attempt reproducibility.`);
+    } catch (err: any) {
+      const errMsg = err?.message || 'Server upload failed. Please try again.';
+      this.qUploadMsg.set(`Upload failed: ${errMsg}`);
     }
   }
 
