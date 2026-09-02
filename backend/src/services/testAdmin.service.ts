@@ -174,7 +174,7 @@ export async function deleteTestAdmin(testId: number): Promise<void> {
   const test = await getAdminTestById(testId);
 
   await transaction(async (client) => {
-    await client.query(`DELETE FROM test_questions WHERE test_id = $1;`, [testId]);
+    await client.query(`DELETE FROM questions WHERE test_id = $1;`, [testId]);
     await client.query(`DELETE FROM test_results WHERE test_id = $1;`, [testId]);
     await client.query(`DELETE FROM student_attempts WHERE test_id = $1;`, [testId]);
     await client.query(`DELETE FROM resources WHERE test_id = $1;`, [testId]);

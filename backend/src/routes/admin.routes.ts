@@ -46,7 +46,11 @@ import {
   getResultByIdAdminHandler,
   overrideStudentScoreAdminHandler
 } from '../controllers/admin/attemptAndResultAdmin.controller';
-import { getAdminDashboardHandler, getAuditLogsAdminHandler } from '../controllers/admin/dashboardAdmin.controller';
+import {
+  getAdminDashboardHandler,
+  getTestDashboardStatsAdminHandler,
+  getAuditLogsAdminHandler
+} from '../controllers/admin/dashboardAdmin.controller';
 import {
   addSyllabusCategoryHandler,
   deleteSyllabusCategoryHandler,
@@ -65,6 +69,8 @@ router.use(requireAdminAuth);
 router.post('/auth/logout', logoutAdminHandler);
 router.get('/auth/me', getAdminMeHandler);
 router.get('/dashboard', getAdminDashboardHandler);
+router.get('/dashboard-stats', getAdminDashboardHandler);
+router.get('/tests/:testId/dashboard-stats', getTestDashboardStatsAdminHandler);
 router.get('/audit-logs', getAuditLogsAdminHandler);
 
 // STUDENT MANAGEMENT

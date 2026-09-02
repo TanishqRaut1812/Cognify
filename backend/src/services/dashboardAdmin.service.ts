@@ -16,7 +16,6 @@ export interface AdminDashboardStatsDto {
 }
 
 export async function getAdminDashboardStats(): Promise<AdminDashboardStatsDto> {
-  // Execute parallel count queries
   const studentsRes = await query(`
     SELECT 
       COUNT(*) AS total,
@@ -59,5 +58,38 @@ export async function getAdminDashboardStats(): Promise<AdminDashboardStatsDto> 
     publishedTests: parseInt(tRow.published_count || '0', 10),
     cheatingAttemptsCount: parseInt(aRow.cheating_count || '0', 10),
     terminatedAttemptsCount: parseInt(aRow.terminated_count || '0', 10)
+  };
+}
+
+export async function getTestDashboardStats(testId: number): Promise<any> {
+  const attemptsRes = await query(
+    `SELECT 
+       COUNT(*) AS total_attempts,
+       COUNT(*) FILTER (WHERE attempt_status = 'In Progress') AS in_progress,
+       COUNT(*) FILTER (WHERE attempt_status = 'Submitted') AS submitted,
+       COUNT(*) FILTER (WHERE attempt_status = 'Terminated') AS terminated,
+       COUNT(*) FILTER (WHERE cheating_flag = 1) AS cheating_count
+     FROM student_attempts
+     WHERE test_id = $1;`,
+    [testId]
+  );
+
+  const testRes = await query(
+    `SELECT is_published, status FROM tests WHERE id = $1;`,
+    [testId]
+  );
+
+  const aRow = attemptsRes.rows[0] || {};
+  const tRow = testRes.rows[0] || {};
+
+  return {
+    testId,
+    status: tRow.status || 'Upcoming',
+    isPublished: Boolean(tRow.is_published),
+    totalAttempts: parseInt(aRow.total_attempts || '0', 10),
+    inProgressAttempts: parseInt(aRow.in_progress || '0', 10),
+    submittedAttempts: parseInt(aRow.submitted || '0', 10),
+    terminatedAttempts: parseInt(aRow.terminated || '0', 10),
+    cheatingAttemptsCount: parseInt(aRow.cheating_count || '0', 10)
   };
 }

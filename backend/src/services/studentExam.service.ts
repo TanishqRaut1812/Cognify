@@ -137,7 +137,7 @@ export async function startTestAttempt(testId: number, registrationNumber: strin
 
   const qRes = await query(
     `SELECT id, question_number AS "questionNumber", question_text AS "questionText", option_a AS "optionA", option_b AS "optionB", option_c AS "optionC", option_d AS "optionD", marks
-     FROM test_questions
+     FROM questions
      WHERE test_id = $1 AND is_active = 1
      ORDER BY question_number ASC`,
     [testId]
@@ -232,7 +232,7 @@ export async function getExamQuestionsForStudent(attemptId: number): Promise<Saf
 
   const res = await query(
     `SELECT id, question_number AS "questionNumber", question_text AS "questionText", option_a AS "optionA", option_b AS "optionB", option_c AS "optionC", option_d AS "optionD", marks
-     FROM test_questions
+     FROM questions
      WHERE test_id = $1 AND is_active = 1
      ORDER BY question_number ASC`,
     [testId]
@@ -297,7 +297,7 @@ export async function submitTestAttempt(attemptId: number): Promise<{ score: num
   const answersRes = await query(
     `SELECT sa.selected_option, tq.correct_option, tq.marks
      FROM student_answers sa
-     JOIN test_questions tq ON sa.question_id = tq.id
+     JOIN questions tq ON sa.question_id = tq.id
      WHERE sa.attempt_id = $1`,
     [attemptId]
   );

@@ -5,7 +5,6 @@ export interface AttemptAdminDto {
   id: number;
   testId: number;
   testTitle?: string;
-  studentId?: number;
   registrationNo: string;
   studentName?: string;
   startedAt: string;
@@ -24,31 +23,32 @@ export async function getTestAttemptsAdmin(testId: number): Promise<AttemptAdmin
     SELECT 
       sa.id,
       sa.test_id AS "testId",
-      t.title AS "testTitle",
-      sa.student_id AS "studentId",
+      t.test_name AS "testTitle",
       sa.registration_no AS "registrationNo",
       st.name AS "studentName",
-      sa.started_at AS "startedAt",
-      sa.submitted_at AS "submittedAt",
+      COALESCE(sa.started_at, sa.start_time) AS "startedAt",
+      COALESCE(sa.submitted_at, sa.end_time) AS "submittedAt",
       sa.attempt_status AS "attemptStatus",
       sa.attendance,
-      sa.fullscreen_violation_count AS "fullscreenViolationCount",
-      sa.violation_count AS "violationCount",
-      (sa.cheating_flag = 1) AS "cheatingFlag",
-      sa.score,
-      sa.percentage
+      COALESCE(sa.fullscreen_violation_count, sa.violation_count, 0) AS "fullscreenViolationCount",
+      COALESCE(sa.violation_count, 0) AS "violationCount",
+      (COALESCE(sa.cheating_flag, 0) = 1) AS "cheatingFlag",
+      COALESCE(sa.score, sa.calculated_score, 0) AS score,
+      COALESCE(sa.percentage, sa.calculated_percentage, 0) AS percentage
     FROM student_attempts sa
-    LEFT JOIN students st ON sa.student_id = st.id OR sa.registration_no = st.registration_no
+    LEFT JOIN students st ON sa.registration_no = st.registration_no
     LEFT JOIN tests t ON sa.test_id = t.id
     WHERE sa.test_id = $1
-    ORDER BY sa.started_at DESC, sa.id DESC;
+    ORDER BY COALESCE(sa.started_at, sa.start_time) DESC, sa.id DESC;
   `;
 
   const res = await query(sql, [testId]);
   return res.rows.map((r) => ({
     ...r,
-    score: r.score !== null ? parseFloat(r.score) : undefined,
-    percentage: r.percentage !== null ? parseFloat(r.percentage) : undefined
+    startedAt: r.startedAt ? new Date(r.startedAt).toISOString() : new Date().toISOString(),
+    submittedAt: r.submittedAt ? new Date(r.submittedAt).toISOString() : undefined,
+    score: r.score !== null ? parseFloat(r.score) : 0,
+    percentage: r.percentage !== null ? parseFloat(r.percentage) : 0
   }));
 }
 
@@ -57,21 +57,20 @@ export async function getAttemptByIdAdmin(attemptId: number): Promise<AttemptAdm
     SELECT 
       sa.id,
       sa.test_id AS "testId",
-      t.title AS "testTitle",
-      sa.student_id AS "studentId",
+      t.test_name AS "testTitle",
       sa.registration_no AS "registrationNo",
       st.name AS "studentName",
-      sa.started_at AS "startedAt",
-      sa.submitted_at AS "submittedAt",
+      COALESCE(sa.started_at, sa.start_time) AS "startedAt",
+      COALESCE(sa.submitted_at, sa.end_time) AS "submittedAt",
       sa.attempt_status AS "attemptStatus",
       sa.attendance,
-      sa.fullscreen_violation_count AS "fullscreenViolationCount",
-      sa.violation_count AS "violationCount",
-      (sa.cheating_flag = 1) AS "cheatingFlag",
-      sa.score,
-      sa.percentage
+      COALESCE(sa.fullscreen_violation_count, sa.violation_count, 0) AS "fullscreenViolationCount",
+      COALESCE(sa.violation_count, 0) AS "violationCount",
+      (COALESCE(sa.cheating_flag, 0) = 1) AS "cheatingFlag",
+      COALESCE(sa.score, sa.calculated_score, 0) AS score,
+      COALESCE(sa.percentage, sa.calculated_percentage, 0) AS percentage
     FROM student_attempts sa
-    LEFT JOIN students st ON sa.student_id = st.id OR sa.registration_no = st.registration_no
+    LEFT JOIN students st ON sa.registration_no = st.registration_no
     LEFT JOIN tests t ON sa.test_id = t.id
     WHERE sa.id = $1;
   `;
@@ -84,7 +83,9 @@ export async function getAttemptByIdAdmin(attemptId: number): Promise<AttemptAdm
   const r = res.rows[0];
   return {
     ...r,
-    score: r.score !== null ? parseFloat(r.score) : undefined,
-    percentage: r.percentage !== null ? parseFloat(r.percentage) : undefined
+    startedAt: r.startedAt ? new Date(r.startedAt).toISOString() : new Date().toISOString(),
+    submittedAt: r.submittedAt ? new Date(r.submittedAt).toISOString() : undefined,
+    score: r.score !== null ? parseFloat(r.score) : 0,
+    percentage: r.percentage !== null ? parseFloat(r.percentage) : 0
   };
 }

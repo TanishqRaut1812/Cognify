@@ -6,7 +6,6 @@ import { NotFoundError, ValidationError } from '../types/api.types';
 export interface ResultAdminDto {
   id: number;
   testId: number;
-  studentId?: number;
   registrationNo: string;
   studentName?: string;
   attendance: 'Present' | 'Absent';
@@ -22,17 +21,15 @@ export async function getTestResultsAdmin(testId: number): Promise<ResultAdminDt
     SELECT 
       tr.id,
       tr.test_id AS "testId",
-      tr.student_id AS "studentId",
       tr.registration_no AS "registrationNo",
       st.name AS "studentName",
       tr.attendance,
       tr.marks_obtained AS "marksObtained",
       tr.percentage,
-      (tr.published = 1) AS published,
-      tr.updated_at AS "updatedAt",
-      tr.updated_by AS "updatedBy"
+      (t.is_published = 1) AS published
     FROM test_results tr
-    LEFT JOIN students st ON tr.student_id = st.id OR tr.registration_no = st.registration_no
+    LEFT JOIN students st ON tr.registration_no = st.registration_no
+    LEFT JOIN tests t ON tr.test_id = t.id
     WHERE tr.test_id = $1
     ORDER BY tr.registration_no ASC;
   `;
@@ -40,8 +37,8 @@ export async function getTestResultsAdmin(testId: number): Promise<ResultAdminDt
   const res = await query(sql, [testId]);
   return res.rows.map((r) => ({
     ...r,
-    marksObtained: parseFloat(r.marksObtained),
-    percentage: parseFloat(r.percentage)
+    marksObtained: parseFloat(r.marksObtained) || 0,
+    percentage: parseFloat(r.percentage) || 0
   }));
 }
 
@@ -50,17 +47,15 @@ export async function getResultByIdAdmin(id: number): Promise<ResultAdminDto> {
     SELECT 
       tr.id,
       tr.test_id AS "testId",
-      tr.student_id AS "studentId",
       tr.registration_no AS "registrationNo",
       st.name AS "studentName",
       tr.attendance,
       tr.marks_obtained AS "marksObtained",
       tr.percentage,
-      (tr.published = 1) AS published,
-      tr.updated_at AS "updatedAt",
-      tr.updated_by AS "updatedBy"
+      (t.is_published = 1) AS published
     FROM test_results tr
-    LEFT JOIN students st ON tr.student_id = st.id OR tr.registration_no = st.registration_no
+    LEFT JOIN students st ON tr.registration_no = st.registration_no
+    LEFT JOIN tests t ON tr.test_id = t.id
     WHERE tr.id = $1;
   `;
 
@@ -70,8 +65,8 @@ export async function getResultByIdAdmin(id: number): Promise<ResultAdminDto> {
   }
   return {
     ...res.rows[0],
-    marksObtained: parseFloat(res.rows[0].marksObtained),
-    percentage: parseFloat(res.rows[0].percentage)
+    marksObtained: parseFloat(res.rows[0].marksObtained) || 0,
+    percentage: parseFloat(res.rows[0].percentage) || 0
   };
 }
 
@@ -93,42 +88,28 @@ export async function overrideStudentScoreAdmin(
     UPDATE test_results
     SET 
       marks_obtained = $1,
-      percentage = $2,
-      updated_at = CURRENT_TIMESTAMP,
-      updated_by = 'Admin'
+      percentage = $2
     WHERE id = $3
     RETURNING id;
   `;
 
   await query(sql, [marksObtained, newPercentage, resultId]);
 
-  // Sync to student_attempts if attempt exists
+  // Update corresponding attempt score/percentage if present
   await query(
-    `
-    UPDATE student_attempts
-    SET 
-      score = $1,
-      calculated_score = $1,
-      percentage = $2,
-      calculated_percentage = $2,
-      updated_at = CURRENT_TIMESTAMP
-    WHERE test_id = $3 AND (student_id = $4 OR registration_no = $5);
-  `,
-    [marksObtained, newPercentage, current.testId, current.studentId, current.registrationNo]
+    `UPDATE student_attempts 
+     SET score = $1, calculated_score = $1, percentage = $2, calculated_percentage = $2
+     WHERE test_id = $3 AND registration_no = $4;`,
+    [marksObtained, newPercentage, current.testId, current.registrationNo]
   );
 
-  const updated = await getResultByIdAdmin(resultId);
-
   await createAuditLog({
-    action: 'OVERRIDE_SCORE',
-    entityType: 'test_result',
-    entityId: resultId,
+    action: 'SCORE_OVERRIDE',
     testId: current.testId,
     registrationNo: current.registrationNo,
     previousValue: `${current.marksObtained} (${current.percentage}%)`,
-    newValue: `${marksObtained} (${newPercentage}%)`,
-    details: `Admin overridden score for ${current.registrationNo} to ${marksObtained}/${test.totalMarks}`
+    newValue: `${marksObtained} (${newPercentage}%)`
   });
 
-  return updated;
+  return getResultByIdAdmin(resultId);
 }
