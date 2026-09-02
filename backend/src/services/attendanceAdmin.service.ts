@@ -1,6 +1,6 @@
-import { query } from '../db/pool';
+import { query, pool } from '../db/pool';
 import { createAuditLog } from './auditLog.service';
-import { getAdminTestById } from './testAdmin.service';
+import { getAdminTestById, recalculateStudentScoresAndRanks } from './testAdmin.service';
 import { getStudentByIdAdmin } from './studentAdmin.service';
 import { ValidationError } from '../types/api.types';
 
@@ -95,6 +95,8 @@ export async function updateStudentAttendanceAdmin(
     details: `Admin set attendance for candidate ${regNo} to ${newStatus}`
   });
 
+  await recalculateStudentScoresAndRanks(pool);
+
   return {
     id: res.rows[0].id,
     testId,
@@ -132,6 +134,8 @@ export async function bulkUpdateAttendanceAdmin(
     testId,
     details: `Admin bulk updated all candidate attendance for test ${testId} to ${newStatus}`
   });
+
+  await recalculateStudentScoresAndRanks(pool);
 
   return { count: res.rows.length, status: newStatus };
 }

@@ -35,19 +35,28 @@ export async function getLeaderboard(classCode: string = 'SY'): Promise<Leaderbo
 
   // Calculate Competition Ranks across the complete class before any truncation
   let currentRank = 1;
+  let rankableCount = 0;
+  let prevScore: number | null = null;
   const leaderboard: LeaderboardEntryDto[] = [];
 
   for (let i = 0; i < rows.length; i++) {
     const entry = rows[i];
-    if (i === 0) {
-      currentRank = 1;
-    } else if (entry.cognifyScore < rows[i - 1].cognifyScore) {
-      currentRank = i + 1; // Standard competition rank (skips ranks for tied scores)
-    } // else equal score -> currentRank remains unchanged
+    let assignedRank: number | null = null;
+
+    if (entry.completedTestsCount > 0) {
+      rankableCount++;
+      if (prevScore === null) {
+        currentRank = 1;
+      } else if (entry.cognifyScore < prevScore) {
+        currentRank = rankableCount;
+      }
+      prevScore = entry.cognifyScore;
+      assignedRank = currentRank;
+    }
 
     leaderboard.push({
       ...entry,
-      rank: currentRank
+      rank: assignedRank as any
     });
   }
 

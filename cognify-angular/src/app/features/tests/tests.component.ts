@@ -80,15 +80,15 @@ import { Test } from '../../core/models/cognify.models';
               <button
                 type="button"
                 class="resource-pill"
-                [class.disabled]="t.status !== 'Completed' || !hasResource(t.id, 'question_paper')"
-                [attr.disabled]="(t.status !== 'Completed' || !hasResource(t.id, 'question_paper')) ? true : null"
+                [class.disabled]="!isUnlocked(t) || !hasResource(t.id, 'question_paper')"
+                [attr.disabled]="(!isUnlocked(t) || !hasResource(t.id, 'question_paper')) ? true : null"
                 (click)="downloadResource(t.id, 'question_paper')"
-                [title]="t.status !== 'Completed' ? 'Question Paper locked until test completion' : (hasResource(t.id, 'question_paper') ? 'Download Question Paper' : 'Question Paper not uploaded yet')"
+                [title]="!isUnlocked(t) ? 'Question Paper locked until finish time (' + t.finish_time + ')' : (hasResource(t.id, 'question_paper') ? 'Download Question Paper' : 'Question Paper not uploaded yet')"
                 tabindex="0"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
                 <span>Question Paper</span>
-                @if (t.status !== 'Completed') {
+                @if (!isUnlocked(t)) {
                   <span style="font-size: 10px; color: var(--accent-rose); font-weight: 700;">(Locked)</span>
                 } @else if (!hasResource(t.id, 'question_paper')) {
                   <span style="font-size: 10px; color: var(--text-muted); font-weight: 500;">(Not Uploaded)</span>
@@ -99,15 +99,15 @@ import { Test } from '../../core/models/cognify.models';
               <button
                 type="button"
                 class="resource-pill"
-                [class.disabled]="t.status !== 'Completed' || !hasResource(t.id, 'answer_key')"
-                [attr.disabled]="(t.status !== 'Completed' || !hasResource(t.id, 'answer_key')) ? true : null"
+                [class.disabled]="!isUnlocked(t) || !hasResource(t.id, 'answer_key')"
+                [attr.disabled]="(!isUnlocked(t) || !hasResource(t.id, 'answer_key')) ? true : null"
                 (click)="downloadResource(t.id, 'answer_key')"
-                [title]="t.status !== 'Completed' ? 'Answer Key locked until test completion' : (hasResource(t.id, 'answer_key') ? 'Download Answer Key' : 'Answer Key not uploaded yet')"
+                [title]="!isUnlocked(t) ? 'Answer Key locked until finish time (' + t.finish_time + ')' : (hasResource(t.id, 'answer_key') ? 'Download Answer Key' : 'Answer Key not uploaded yet')"
                 tabindex="0"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
                 <span>Answer Key</span>
-                @if (t.status !== 'Completed') {
+                @if (!isUnlocked(t)) {
                   <span style="font-size: 10px; color: var(--accent-rose); font-weight: 700;">(Locked)</span>
                 } @else if (!hasResource(t.id, 'answer_key')) {
                   <span style="font-size: 10px; color: var(--text-muted); font-weight: 500;">(Not Uploaded)</span>
@@ -127,6 +127,15 @@ export class TestsComponent implements OnInit {
   tests = signal<Test[]>([]);
   resourceMap = signal<{ [testId: number]: ResourceStatusMap }>({});
   errorMessage = signal<string | null>(null);
+
+  isUnlocked(t: Test): boolean {
+    if (!t.finish_time) return true;
+    const now = new Date();
+    const dateStr = t.formatted_date || t.test_date || now.toISOString().slice(0, 10);
+    const finishStr = t.finish_time.length === 5 ? `${t.finish_time}:00` : t.finish_time;
+    const finishDateTime = new Date(`${dateStr}T${finishStr}`);
+    return now >= finishDateTime;
+  }
 
   async ngOnInit(): Promise<void> {
     const list = await this.leaderboardService.getAllTests();

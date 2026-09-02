@@ -1,6 +1,6 @@
-import { query } from '../db/pool';
+import { query, pool } from '../db/pool';
 import { createAuditLog } from './auditLog.service';
-import { getAdminTestById } from './testAdmin.service';
+import { getAdminTestById, recalculateStudentScoresAndRanks } from './testAdmin.service';
 import { NotFoundError, ValidationError } from '../types/api.types';
 
 export interface ResultAdminDto {
@@ -110,6 +110,8 @@ export async function overrideStudentScoreAdmin(
     previousValue: `${current.marksObtained} (${current.percentage}%)`,
     newValue: `${marksObtained} (${newPercentage}%)`
   });
+
+  await recalculateStudentScoresAndRanks(pool);
 
   return getResultByIdAdmin(resultId);
 }

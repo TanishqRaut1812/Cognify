@@ -204,13 +204,13 @@ export async function recalculateStudentScoresAndRanks(client: any): Promise<voi
       s.registration_no,
       s.class_name,
       COUNT(tr.id) FILTER (WHERE tr.attendance = 'Present' AND t.is_published = 1) AS completed_tests_count,
-      COALESCE(ROUND(AVG(tr.percentage) FILTER (WHERE t.is_published = 1), 2), 0.0) AS cognify_score
+      COALESCE(ROUND(AVG(tr.percentage) FILTER (WHERE tr.attendance = 'Present' AND t.is_published = 1), 2), 0.0) AS cognify_score
     FROM students s
     LEFT JOIN test_results tr ON s.registration_no = tr.registration_no
     LEFT JOIN tests t ON tr.test_id = t.id AND t.is_published = 1
     GROUP BY s.registration_no, s.class_name, s.roll_no
     ORDER BY s.class_name ASC, 
-             COALESCE(ROUND(AVG(tr.percentage) FILTER (WHERE t.is_published = 1), 2), 0.0) DESC,
+             COALESCE(ROUND(AVG(tr.percentage) FILTER (WHERE tr.attendance = 'Present' AND t.is_published = 1), 2), 0.0) DESC,
              CASE WHEN s.roll_no ~ '^[0-9]+$' THEN s.roll_no::int ELSE 99999 END ASC, 
              s.roll_no ASC, 
              s.registration_no ASC;
@@ -235,23 +235,33 @@ export async function recalculateStudentScoresAndRanks(client: any): Promise<voi
   const regArray: string[] = [];
   const scoreArray: number[] = [];
   const countArray: number[] = [];
-  const rankArray: number[] = [];
+  const rankArray: (number | null)[] = [];
   const classArray: string[] = [];
 
   for (const [className, rows] of classGroups.entries()) {
     let currentRank = 1;
+    let rankableIndex = 0;
+    let prevScore: number | null = null;
+
     for (let i = 0; i < rows.length; i++) {
       const entry = rows[i];
-      if (i === 0) {
-        currentRank = 1;
-      } else if (entry.cognifyScore < rows[i - 1].cognifyScore) {
-        currentRank = i + 1;
+      let assignedRank = 9999;
+
+      if (entry.completedTestsCount > 0) {
+        rankableIndex++;
+        if (prevScore === null) {
+          currentRank = 1;
+        } else if (entry.cognifyScore < prevScore) {
+          currentRank = rankableIndex;
+        }
+        prevScore = entry.cognifyScore;
+        assignedRank = currentRank;
       }
 
       regArray.push(entry.registrationNo);
       scoreArray.push(entry.cognifyScore);
       countArray.push(entry.completedTestsCount);
-      rankArray.push(currentRank);
+      rankArray.push(assignedRank);
       classArray.push(className);
     }
   }

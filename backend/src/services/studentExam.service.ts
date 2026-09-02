@@ -121,6 +121,23 @@ export async function startTestAttempt(testId: number, registrationNumber: strin
     throw new NotFoundError(`Test with ID ${testId} not found`);
   }
   const test = testRes.rows[0];
+
+  // Rule 1: CURRENT TEST MUST NOT START BEFORE START TIME
+  if (test.status === 'Upcoming') {
+    throw new ValidationError(`Test #${test.test_number} "${test.test_name}" is Upcoming and not active yet.`);
+  }
+
+  if (test.start_time && test.test_date) {
+    const now = new Date();
+    const testDateStr = test.test_date;
+    const startTimeStr = test.start_time.length === 5 ? `${test.start_time}:00` : test.start_time;
+    const startDateTime = new Date(`${testDateStr}T${startTimeStr}`);
+
+    if (now < startDateTime) {
+      throw new ValidationError(`Test #${test.test_number} has not started yet. Starts at ${test.start_time} on ${test.test_date}.`);
+    }
+  }
+
   const durationMins = test.duration_minutes || 60;
 
   const attemptRes = await query(

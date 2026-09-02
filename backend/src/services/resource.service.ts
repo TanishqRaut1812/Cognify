@@ -53,14 +53,23 @@ export async function getResources(
   }));
 }
 
+function isResourceUnlockedByFinishTime(test: { test_date?: string; finish_time?: string }): boolean {
+  if (!test.finish_time) return true;
+  const now = new Date();
+  const testDateStr = test.test_date || '2026-08-25';
+  const finishTimeStr = test.finish_time.length === 5 ? `${test.finish_time}:00` : test.finish_time;
+  const finishDateTime = new Date(`${testDateStr}T${finishTimeStr}`);
+  return now >= finishDateTime;
+}
+
 export async function getTestResourceStatus(testId: number): Promise<any> {
   // Fetch test info
-  const testRes = await query("SELECT id, status, is_published FROM tests WHERE id = $1;", [testId]);
+  const testRes = await query("SELECT id, status, is_published, test_date, finish_time FROM tests WHERE id = $1;", [testId]);
   if (testRes.rows.length === 0) {
     throw new AppError('Test not found', 404, 'NOT_FOUND');
   }
   const test = testRes.rows[0];
-  const isCompleted = test.status === 'Completed';
+  const isUnlocked = isResourceUnlockedByFinishTime(test);
 
   // Fetch resources for test
   const resList = await query("SELECT id, resource_type, title, file_path FROM resources WHERE test_id = $1;", [testId]);
@@ -68,8 +77,8 @@ export async function getTestResourceStatus(testId: number): Promise<any> {
   const map: Record<string, { exists: boolean; resourceId?: number; title?: string; isLocked: boolean }> = {
     notes: { exists: false, isLocked: false },
     practice: { exists: false, isLocked: false },
-    question_paper: { exists: false, isLocked: !isCompleted },
-    answer_key: { exists: false, isLocked: !isCompleted }
+    question_paper: { exists: false, isLocked: !isUnlocked },
+    answer_key: { exists: false, isLocked: !isUnlocked }
   };
 
   for (const r of resList.rows) {
@@ -84,14 +93,14 @@ export async function getTestResourceStatus(testId: number): Promise<any> {
   return {
     testId,
     testStatus: test.status,
-    isCompleted,
+    isCompleted: isUnlocked,
     resources: map
   };
 }
 
 export async function getResourceDownloadUrl(testId: number, resourceType: string): Promise<{ downloadUrl: string; title: string; resourceType: string }> {
   // 1. Verify test & access rules
-  const testRes = await query("SELECT id, test_number, test_name, status, is_published FROM tests WHERE id = $1;", [testId]);
+  const testRes = await query("SELECT id, test_number, test_name, status, is_published, test_date, finish_time FROM tests WHERE id = $1;", [testId]);
   if (testRes.rows.length === 0) {
     throw new AppError('Test not found', 404, 'NOT_FOUND');
   }
@@ -99,10 +108,11 @@ export async function getResourceDownloadUrl(testId: number, resourceType: strin
 
   const typeNorm = resourceType.toLowerCase().trim();
 
-  // Access control rule: question_paper and answer_key locked until test is Completed
-  if ((typeNorm === 'question_paper' || typeNorm === 'answer_key') && test.status !== 'Completed') {
+  // Rule 2: Access control rule: question_paper and answer_key locked until finish_time
+  const isUnlocked = isResourceUnlockedByFinishTime(test);
+  if ((typeNorm === 'question_paper' || typeNorm === 'answer_key') && !isUnlocked) {
     throw new AppError(
-      `${typeNorm === 'question_paper' ? 'Question Paper' : 'Answer Key'} is inaccessible until the test has passed its Finish Time AND is marked Completed.`,
+      `${typeNorm === 'question_paper' ? 'Question Paper' : 'Answer Key'} is inaccessible until the test finish time (${test.finish_time || 'scheduled time'}).`,
       403,
       'LOCKED_RESOURCE'
     );
