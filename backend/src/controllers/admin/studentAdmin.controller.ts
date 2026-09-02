@@ -66,7 +66,8 @@ export async function deleteStudentAdminHandler(req: Request, res: Response, nex
 export async function importStudentsExcelHandler(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     if (!req.file) throw new ValidationError('No Excel file uploaded');
-    const summary = await importStudentsFromExcel(req.file.buffer, req.file.originalname);
+    const className = (req.body.className || req.query.className || 'SY').toString().trim();
+    const summary = await importStudentsFromExcel(req.file.buffer, req.file.originalname, className);
     sendSuccess(res, summary);
   } catch (err) {
     next(err);

@@ -238,15 +238,18 @@ import { Test, DashboardStats, AuditLog, BackupRecord, AttendanceRecord, Student
               @if (getSelectedClassStudents().length > 0) {
                 <table class="ranking-table">
                   <thead>
-                    <tr><th>#</th><th>Roll Number</th><th>Student Name</th><th>Registration Number</th></tr>
+                    <tr><th>#</th><th>Roll Number</th><th>Student Name</th><th>Registration Number</th><th>Action</th></tr>
                   </thead>
                   <tbody>
-                    @for (s of getSelectedClassStudents(); track s.registration_no; let idx = $index) {
+                    @for (s of getSelectedClassStudents(); track (s.registration_no || s.registrationNo); let idx = $index) {
                       <tr>
                         <td style="color: var(--text-muted);">{{ idx + 1 }}</td>
-                        <td style="font-family: monospace; font-weight: 600;">{{ s.roll_no }}</td>
+                        <td style="font-family: monospace; font-weight: 600;">{{ s.roll_no || s.rollNo }}</td>
                         <td style="font-weight: 600;">{{ s.name }}</td>
-                        <td style="font-family: monospace; color: var(--accent-sky);">{{ s.registration_no }}</td>
+                        <td style="font-family: monospace; color: var(--accent-sky);">{{ s.registration_no || s.registrationNo }}</td>
+                        <td>
+                          <button type="button" class="btn btn-secondary btn-sm" (click)="deleteStudentRow(s)">Remove</button>
+                        </td>
                       </tr>
                     }
                   </tbody>
@@ -822,28 +825,36 @@ export class AdminDashboardComponent implements OnInit {
     }
   }
 
+  async deleteStudentRow(student: Student): Promise<void> {
+    const regNo = student.registration_no || (student as any).registrationNo;
+    const name = student.name || 'Student';
+    if (confirm(`Remove student ${name} (${regNo}) from master roster?`)) {
+      try {
+        await this.adminService.deleteStudent(regNo);
+        await this.loadRosters();
+        alert(`Student ${name} (${regNo}) removed from roster.`);
+      } catch (err: any) {
+        alert(`Cannot delete student: ${err?.error?.error || err?.message || 'Server error'}`);
+      }
+    }
+  }
+
   async onStudentFileSelected(event: any, className: string = 'SY'): Promise<void> {
     const file = event.target.files[0];
     if (!file) return;
 
-    const res = await this.excelService.validateAndParseStudents(file);
-    if (!res.valid) {
-      this.studentUploadMsg.set(`Validation errors: ${res.errors.join('; ')}`);
-      return;
-    }
-
     try {
-      this.studentUploadMsg.set(`Validated ${res.data.length} records locally. Uploading to database...`);
-      const serverRes = await this.adminService.uploadStudentExcel(file);
-      const inserted = serverRes?.inserted !== undefined ? serverRes.inserted : res.data.length;
+      this.studentUploadMsg.set(`Uploading student roster Excel file for ${className}...`);
+      const serverRes = await this.adminService.uploadStudentExcel(file, className);
+      const inserted = serverRes?.importedCount !== undefined ? serverRes.importedCount : serverRes?.inserted;
 
       await this.loadRosters();
       const logs = await this.adminService.getAuditLogs();
       this.auditLogs.set(logs);
 
-      this.studentUploadMsg.set(`Successfully imported ${inserted} student records into database for ${className}. Confirmed roster update.`);
+      this.studentUploadMsg.set(`Successfully replaced ${className} master student roster (${inserted} students).`);
     } catch (err: any) {
-      const errMsg = err?.message || 'Server upload failed. Please try again.';
+      const errMsg = err?.error?.error || err?.message || 'Server upload failed. Please try again.';
       this.studentUploadMsg.set(`Upload failed: ${errMsg}`);
     }
   }

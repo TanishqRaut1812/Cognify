@@ -12,10 +12,15 @@ export class AdminService {
 
   constructor(private api: ApiService) {}
 
-  async uploadStudentExcel(file: File): Promise<any> {
+  async uploadStudentExcel(file: File, className: string = 'SY'): Promise<any> {
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('className', className);
     return await firstValueFrom(this.api.post<any>('/admin/students/import', formData));
+  }
+
+  async deleteStudent(regNo: string): Promise<any> {
+    return await firstValueFrom(this.api.delete<any>(`/admin/students/${regNo}`));
   }
 
   async uploadQuestionExcel(testId: number, file: File): Promise<any> {

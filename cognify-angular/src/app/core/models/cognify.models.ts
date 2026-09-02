@@ -12,8 +12,10 @@ export interface ApiResponse<T> {
 export interface Student {
   id?: number;
   registration_no: string;
+  registrationNo?: string;
   registrationNumber?: string;
   roll_no?: string;
+  rollNo?: string;
   rollNumber?: string;
   name: string;
   class_name?: 'SY' | 'TY' | 'Final Year';
