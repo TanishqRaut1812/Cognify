@@ -129,12 +129,12 @@ export async function startTestAttempt(testId: number, registrationNumber: strin
 
   if (test.start_time && test.test_date) {
     const now = new Date();
-    const testDateStr = test.test_date;
+    const dateOnly = typeof test.test_date === 'string' ? test.test_date.split('T')[0] : new Date(test.test_date).toISOString().split('T')[0];
     const startTimeStr = test.start_time.length === 5 ? `${test.start_time}:00` : test.start_time;
-    const startDateTime = new Date(`${testDateStr}T${startTimeStr}`);
+    const startDateTime = new Date(`${dateOnly}T${startTimeStr}`);
 
     if (now < startDateTime) {
-      throw new ValidationError(`Test #${test.test_number} has not started yet. Starts at ${test.start_time} on ${test.test_date}.`);
+      throw new ValidationError(`Test #${test.test_number} has not started yet. Starts at ${test.start_time} on ${dateOnly}.`);
     }
   }
 

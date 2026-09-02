@@ -56,9 +56,10 @@ export async function getResources(
 function isResourceUnlockedByFinishTime(test: { test_date?: string; finish_time?: string }): boolean {
   if (!test.finish_time) return true;
   const now = new Date();
-  const testDateStr = test.test_date || '2026-08-25';
+  const rawDate = test.test_date || '2026-08-25';
+  const dateOnly = typeof rawDate === 'string' ? rawDate.split('T')[0] : new Date(rawDate).toISOString().split('T')[0];
   const finishTimeStr = test.finish_time.length === 5 ? `${test.finish_time}:00` : test.finish_time;
-  const finishDateTime = new Date(`${testDateStr}T${finishTimeStr}`);
+  const finishDateTime = new Date(`${dateOnly}T${finishTimeStr}`);
   return now >= finishDateTime;
 }
 
