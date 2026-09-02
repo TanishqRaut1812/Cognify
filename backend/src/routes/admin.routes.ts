@@ -32,7 +32,8 @@ import {
 import {
   uploadQuestionPaperHandler,
   uploadAnswerKeyHandler,
-  uploadResourceHandler
+  uploadResourceHandler,
+  deleteResourceHandler
 } from '../controllers/admin/fileStorageAdmin.controller';
 import {
   getTestAttendanceAdminHandler,
@@ -96,6 +97,7 @@ router.post('/tests/:testId/questions/import', uploadSingleFile, importQuestions
 router.post('/tests/:testId/question-paper', uploadSingleFile, uploadQuestionPaperHandler);
 router.post('/tests/:testId/answer-key', uploadSingleFile, uploadAnswerKeyHandler);
 router.post('/tests/:testId/resources', uploadSingleFile, uploadResourceHandler);
+router.delete('/resources/:id', deleteResourceHandler);
 
 // ATTENDANCE MANAGEMENT
 router.get('/tests/:testId/attendance', getTestAttendanceAdminHandler);

@@ -1,102 +1,33 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from './api.service';
-import { DashboardStats, AttendanceRecord, AuditLog, BackupRecord } from '../models/cognify.models';
+import { DashboardStats, AttendanceRecord, AuditLog, BackupRecord, Student, SyllabusCategory, Resource } from '../models/cognify.models';
 
 @Injectable({
   providedIn: 'root'
 })
 export class AdminService {
-  auditLogs = signal<AuditLog[]>([]);
-  backups = signal<BackupRecord[]>([]);
-
   constructor(private api: ApiService) {}
-
-  async uploadStudentExcel(file: File, className: string = 'SY'): Promise<any> {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('className', className);
-    return await firstValueFrom(this.api.post<any>('/admin/students/import', formData));
-  }
-
-  async deleteStudent(regNo: string): Promise<any> {
-    return await firstValueFrom(this.api.delete<any>(`/admin/students/${regNo}`));
-  }
-
-  async uploadQuestionExcel(testId: number, file: File): Promise<any> {
-    const formData = new FormData();
-    formData.append('file', file);
-    return await firstValueFrom(this.api.post<any>(`/admin/tests/${testId}/questions/import`, formData));
-  }
-
-  async uploadQuestionPaper(testId: number, file: File): Promise<any> {
-    const formData = new FormData();
-    formData.append('file', file);
-    return await firstValueFrom(this.api.post<any>(`/admin/tests/${testId}/question-paper`, formData));
-  }
-
-  async uploadAnswerKey(testId: number, file: File): Promise<any> {
-    const formData = new FormData();
-    formData.append('file', file);
-    return await firstValueFrom(this.api.post<any>(`/admin/tests/${testId}/answer-key`, formData));
-  }
-
-  async uploadResource(testId: number, title: string, type: string, file: File): Promise<any> {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('title', title);
-    formData.append('type', type);
-    return await firstValueFrom(this.api.post<any>(`/admin/tests/${testId}/resources`, formData));
-  }
-
-  async getTestResources(testId: number): Promise<any[]> {
-    try {
-      const res = await firstValueFrom(this.api.get<any[]>(`/resources?testId=${testId}`));
-      return Array.isArray(res) ? res : [];
-    } catch (e) {
-      return [];
-    }
-  }
-
-  async getTestSyllabus(testId: number): Promise<any[]> {
-    try {
-      const res = await firstValueFrom(this.api.get<any[]>(`/syllabus?testId=${testId}`));
-      return Array.isArray(res) ? res : [];
-    } catch (e) {
-      return [];
-    }
-  }
-
-  async addSyllabusCategory(testId: number, categoryName: string, topics: string): Promise<any> {
-    return await firstValueFrom(this.api.post<any>(`/admin/tests/${testId}/syllabus`, { categoryName, topics }));
-  }
-
-  async deleteSyllabusCategory(syllabusId: number): Promise<any> {
-    return await firstValueFrom(this.api.delete<any>(`/admin/syllabus/${syllabusId}`));
-  }
 
   async getDashboardStats(): Promise<DashboardStats> {
     try {
-      const res = await firstValueFrom(this.api.get<any>('/admin/dashboard'));
+      const res = await firstValueFrom(this.api.get<any>('/admin/dashboard-stats'));
       if (res) {
         return {
-          students_by_class: {
-            SY: res.studentsByClass?.SY || 0,
-            TY: res.studentsByClass?.TY || 0,
-            'Final Year': res.studentsByClass?.['Final Year'] || 0,
-            total: res.totalStudents || 0
-          },
-          tests_by_status: {
-            Upcoming: 0,
-            Current: res.activeTests || 0,
-            Completed: res.completedTests || 0,
-            Published: res.publishedTests || 0,
-            total: res.totalTests || 0
-          }
+          totalStudents: res.totalStudents,
+          studentsByClass: res.studentsByClass,
+          students_by_class: res.students_by_class,
+          totalTests: res.totalTests,
+          activeTests: res.activeTests,
+          completedTests: res.completedTests,
+          publishedTests: res.publishedTests,
+          cheatingAttemptsCount: res.cheatingAttemptsCount,
+          terminatedAttemptsCount: res.terminatedAttemptsCount,
+          tests_by_status: res.tests_by_status
         };
       }
     } catch (e) {
-      console.warn('Failed to fetch admin dashboard stats:', e);
+      console.warn('Failed to fetch admin stats:', e);
     }
 
     return {
@@ -245,21 +176,115 @@ export class AdminService {
     }
   }
 
-  async getAttemptById(attemptId: number): Promise<any> {
-    return await firstValueFrom(this.api.get<any>(`/admin/attempts/${attemptId}`));
-  }
-
   async getResultsForTest(testId: number): Promise<any[]> {
     try {
       const res = await firstValueFrom(this.api.get<any[]>(`/admin/tests/${testId}/results`));
       return Array.isArray(res) ? res : [];
     } catch (e) {
-      console.warn(`Failed to fetch results for test ${testId}:`, e);
       return [];
     }
   }
 
-  async overrideResultScore(resultId: number, marksObtained: number): Promise<any> {
-    return await firstValueFrom(this.api.put<any>(`/admin/results/${resultId}`, { marksObtained }));
+  async overrideResultScore(attemptId: number, score: number): Promise<any> {
+    return await firstValueFrom(this.api.put<any>(`/admin/attempts/${attemptId}/score`, { score }));
+  }
+
+  // SYLLABUS MANAGEMENT API
+  async getTestSyllabus(testId: number): Promise<any[]> {
+    try {
+      const res = await firstValueFrom(this.api.get<any[]>(`/syllabus?testId=${testId}`));
+      return Array.isArray(res) ? res : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  async addSyllabusCategory(testId: number, categoryName: string, topics: string): Promise<any> {
+    return await firstValueFrom(this.api.post<any>(`/admin/tests/${testId}/syllabus`, { categoryName, topics }));
+  }
+
+  async deleteSyllabusCategory(syllabusId: number): Promise<any> {
+    return await firstValueFrom(this.api.delete<any>(`/admin/syllabus/${syllabusId}`));
+  }
+
+  // RESOURCE MANAGEMENT API
+  async getAllResources(): Promise<Resource[]> {
+    try {
+      const res = await firstValueFrom(this.api.get<any[]>('/resources'));
+      if (res && Array.isArray(res)) {
+        return res.map((r) => ({
+          id: r.id,
+          test_id: r.testId || r.test_id,
+          resource_type: r.resourceType || r.resource_type || 'notes',
+          title: r.title,
+          storage_path: r.filePath || r.file_path || '',
+          visibility: 'public'
+        }));
+      }
+    } catch (e) {
+      console.warn('Failed to fetch resources:', e);
+    }
+    return [];
+  }
+
+  async getTestResources(testId: number): Promise<Resource[]> {
+    try {
+      const res = await firstValueFrom(this.api.get<any[]>(`/resources?testId=${testId}`));
+      if (res && Array.isArray(res)) {
+        return res.map((r) => ({
+          id: r.id,
+          test_id: r.testId || r.test_id || testId,
+          resource_type: r.resourceType || r.resource_type || 'notes',
+          title: r.title,
+          storage_path: r.filePath || r.file_path || '',
+          visibility: 'public'
+        }));
+      }
+    } catch (e) {
+      console.warn(`Failed to fetch resources for test ${testId}:`, e);
+    }
+    return [];
+  }
+
+  async uploadResource(testId: number, title: string, resourceType: string, file: File): Promise<any> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('title', title);
+    formData.append('resourceType', resourceType);
+    return await firstValueFrom(this.api.post<any>(`/admin/tests/${testId}/resources`, formData));
+  }
+
+  async uploadQuestionPaper(testId: number, file: File): Promise<any> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return await firstValueFrom(this.api.post<any>(`/admin/tests/${testId}/question-paper`, formData));
+  }
+
+  async uploadAnswerKey(testId: number, file: File): Promise<any> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return await firstValueFrom(this.api.post<any>(`/admin/tests/${testId}/answer-key`, formData));
+  }
+
+  async deleteResource(resourceId: number): Promise<any> {
+    return await firstValueFrom(this.api.delete<any>(`/admin/resources/${resourceId}`));
+  }
+
+  // EXCEL IMPORT API
+  async uploadQuestionExcel(testId: number, file: File): Promise<any> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return await firstValueFrom(this.api.post<any>(`/admin/tests/${testId}/questions/import`, formData));
+  }
+
+  async uploadStudentExcel(file: File, className: string = 'SY'): Promise<any> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('className', className);
+    return await firstValueFrom(this.api.post<any>('/admin/students/import', formData));
+  }
+
+  async deleteStudent(registrationNo: string): Promise<any> {
+    return await firstValueFrom(this.api.delete<any>(`/admin/students/${encodeURIComponent(registrationNo)}`));
   }
 }

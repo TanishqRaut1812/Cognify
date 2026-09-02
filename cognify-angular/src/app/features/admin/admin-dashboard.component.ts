@@ -364,11 +364,19 @@ import { Test, DashboardStats, AuditLog, BackupRecord, AttendanceRecord, Student
 
               <div class="form-group">
                 <label>PDF File Upload</label>
-                <input type="file" accept=".pdf" required>
+                <input type="file" accept=".pdf" (change)="onResourceFileSelected($event)" required>
               </div>
 
+              @if (getExistingResource(newResource.test_id, newResource.resource_type)) {
+                <div class="span-full" style="padding: 10px 14px; background: rgba(245, 158, 11, 0.15); border: 1px solid var(--accent-amber); border-radius: var(--radius-sm); color: #fef08a; font-size: 13px;">
+                  ⚠️ A <strong>{{ newResource.resource_type?.replace('_', ' ') }}</strong> resource already exists for Test {{ newResource.test_id }}. Uploading will <strong>REPLACE</strong> the existing file.
+                </div>
+              }
+
               <div class="span-full" style="text-align: right;">
-                <button type="submit" class="btn btn-primary">Upload Resource</button>
+                <button type="submit" class="btn btn-primary" [disabled]="isUploadingResource()">
+                  {{ isUploadingResource() ? 'Uploading...' : (getExistingResource(newResource.test_id, newResource.resource_type) ? 'Replace Existing Resource' : 'Upload Resource') }}
+                </button>
               </div>
             </form>
           </div>
@@ -607,9 +615,7 @@ export class AdminDashboardComponent implements OnInit {
 
     await this.loadRosters();
 
-    // Resources and Syllabus list (Data-driven: starts empty until uploaded or fetched)
-    const prep = await this.leaderboardService.getCurrentPrep();
-    this.resourcesList.set(prep.resources || []);
+    await this.loadResources();
     this.syllabusList.set([]);
   }
 
@@ -655,27 +661,6 @@ export class AdminDashboardComponent implements OnInit {
   loadResultsForTest(testId: number): void {
     // Data-driven: clear results list unless real database/import results exist
     this.testResultsList.set([]);
-  }
-
-  uploadResource(): void {
-    if (this.newResource.title) {
-      const resItem: Resource = {
-        id: Date.now(),
-        test_id: Number(this.newResource.test_id || 3),
-        resource_type: this.newResource.resource_type || 'notes',
-        title: this.newResource.title,
-        file_path: '#'
-      };
-      this.resourcesList.set([resItem, ...this.resourcesList()]);
-      alert('Resource file uploaded successfully!');
-      this.newResource.title = '';
-    }
-  }
-
-  deleteResource(id: number): void {
-    if (confirm('Delete this resource file?')) {
-      this.resourcesList.set(this.resourcesList().filter(r => r.id !== id));
-    }
   }
 
   addSyllabus(): void {
@@ -867,6 +852,73 @@ export class AdminDashboardComponent implements OnInit {
         this.resultsUploadMsg.set(`Validated ${res.data.length} result records. Recalculated Cognify Scores & competition rankings.`);
       } else {
         this.resultsUploadMsg.set(`Validation errors: ${res.errors.join('; ')}`);
+      }
+    }
+  }
+
+  selectedResourceFile: File | null = null;
+  isUploadingResource = signal<boolean>(false);
+
+  async loadResources(): Promise<void> {
+    const list = await this.adminService.getAllResources();
+    this.resourcesList.set(list);
+  }
+
+  onResourceFileSelected(event: any): void {
+    const file = event.target.files[0];
+    if (file) {
+      this.selectedResourceFile = file;
+      if (!this.newResource.title) {
+        this.newResource.title = file.name.replace(/\.[^/.]+$/, '');
+      }
+    }
+  }
+
+  getExistingResource(testId?: number, resourceType?: string): Resource | undefined {
+    if (!testId || !resourceType) return undefined;
+    return this.resourcesList().find(
+      (r) => Number(r.test_id) === Number(testId) && r.resource_type === resourceType
+    );
+  }
+
+  async uploadResource(): Promise<void> {
+    if (!this.selectedResourceFile) {
+      alert('Please select a PDF file to upload.');
+      return;
+    }
+    if (!this.newResource.test_id || !this.newResource.resource_type || !this.newResource.title?.trim()) {
+      alert('Please fill in all required resource details (Test, Resource Type, Document Title).');
+      return;
+    }
+
+    try {
+      this.isUploadingResource.set(true);
+      const res = await this.adminService.uploadResource(
+        Number(this.newResource.test_id),
+        this.newResource.title.trim(),
+        this.newResource.resource_type,
+        this.selectedResourceFile
+      );
+      alert(`Resource "${res.title}" ${res.isReplacement ? 'replaced' : 'uploaded'} successfully!`);
+      this.newResource.title = '';
+      this.selectedResourceFile = null;
+      await this.loadResources();
+    } catch (err: any) {
+      const errMsg = err?.error?.error?.message || err?.message || 'Server error during upload';
+      alert(`Failed to upload resource: ${errMsg}`);
+    } finally {
+      this.isUploadingResource.set(false);
+    }
+  }
+
+  async deleteResource(id: number): Promise<void> {
+    if (confirm('Delete this resource from Object Storage and database?')) {
+      try {
+        await this.adminService.deleteResource(id);
+        await this.loadResources();
+        alert('Resource deleted successfully.');
+      } catch (err: any) {
+        alert(`Failed to delete resource: ${err?.error?.error?.message || err?.message || 'Server error'}`);
       }
     }
   }
