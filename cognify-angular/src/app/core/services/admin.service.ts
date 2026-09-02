@@ -24,6 +24,48 @@ export class AdminService {
     return await firstValueFrom(this.api.post<any>(`/admin/tests/${testId}/questions/import`, formData));
   }
 
+  async uploadQuestionPaper(testId: number, file: File): Promise<any> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return await firstValueFrom(this.api.post<any>(`/admin/tests/${testId}/question-paper`, formData));
+  }
+
+  async uploadAnswerKey(testId: number, file: File): Promise<any> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return await firstValueFrom(this.api.post<any>(`/admin/tests/${testId}/answer-key`, formData));
+  }
+
+  async uploadResource(testId: number, title: string, type: string, file: File): Promise<any> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('title', title);
+    formData.append('type', type);
+    return await firstValueFrom(this.api.post<any>(`/admin/tests/${testId}/resources`, formData));
+  }
+
+  async getTestResources(testId: number): Promise<any[]> {
+    try {
+      const res = await firstValueFrom(this.api.get<any[]>(`/resources?testId=${testId}`));
+      return Array.isArray(res) ? res : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  async getTestSyllabus(testId: number): Promise<any[]> {
+    try {
+      const res = await firstValueFrom(this.api.get<any[]>(`/syllabus?testId=${testId}`));
+      return Array.isArray(res) ? res : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  async addSyllabusCategory(testId: number, categoryName: string, topics: string): Promise<any> {
+    return await firstValueFrom(this.api.post<any>(`/admin/tests/${testId}/syllabus`, { categoryName, topics }));
+  }
+
   async getDashboardStats(): Promise<DashboardStats> {
     try {
       const res = await firstValueFrom(this.api.get<any>('/admin/dashboard'));

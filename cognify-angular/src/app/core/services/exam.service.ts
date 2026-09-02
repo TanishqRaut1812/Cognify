@@ -173,11 +173,30 @@ export class ExamService {
     }
   }
 
-  async startExam(student: Student, testId: number = 3): Promise<ActiveExamState> {
+  async getActiveTestId(): Promise<number> {
     try {
+      const tests = await firstValueFrom(this.api.get<any[]>('/tests'));
+      if (Array.isArray(tests) && tests.length > 0) {
+        const current = tests.find((t: any) => t.status === 'Current');
+        if (current) return current.id;
+        return tests[0].id;
+      }
+    } catch (e) {
+      console.warn('Failed to fetch active test list:', e);
+    }
+    return 1;
+  }
+
+  async startExam(student: Student, testId?: number): Promise<ActiveExamState> {
+    try {
+      let targetId = testId;
+      if (!targetId || targetId <= 0) {
+        targetId = await this.getActiveTestId();
+      }
+
       const startRes = await firstValueFrom(
         this.api.post<{ attempt: StudentAttemptDetails; attemptToken: string }>(
-          `/student/tests/${testId}/start`,
+          `/student/tests/${targetId}/start`,
           { registrationNumber: student.registration_no }
         )
       );

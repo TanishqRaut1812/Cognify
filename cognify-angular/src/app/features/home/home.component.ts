@@ -120,7 +120,7 @@ import { StudentScore } from '../../core/models/cognify.models';
               <h3 class="timeline-title">{{ curr.test_name }}</h3>
               <p class="timeline-date">Date: {{ curr.formatted_date || curr.test_date }} | {{ curr.start_time }} - {{ curr.finish_time }}</p>
               <div style="display: flex; gap: 8px;">
-                <a routerLink="/exam" class="btn btn-primary btn-sm">Enter Exam Workspace</a>
+                <a [routerLink]="['/exam']" [queryParams]="{ testId: curr.id }" class="btn btn-primary btn-sm">Enter Exam Workspace</a>
               </div>
             </div>
           }

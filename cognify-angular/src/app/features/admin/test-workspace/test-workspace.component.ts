@@ -280,11 +280,20 @@ import { AttendanceRecord, AuditLog, Resource, SyllabusCategory } from '../../..
                       <div style="font-size: 12px; color: var(--text-muted);">{{ s.topics_json }}</div>
                     </div>
                   </div>
+                } @empty {
+                  <div style="font-size: 13px; color: var(--text-muted); padding: 8px 0;">No syllabus categories added yet.</div>
                 }
               </div>
+
+              <!-- ADD SYLLABUS FORM -->
+              <form (submit)="$event.preventDefault(); saveSyllabusCategory()" style="display: flex; flex-direction: column; gap: 10px; margin-top: 16px; border-top: 1px solid var(--border-subtle); padding-top: 12px;">
+                <input type="text" [(ngModel)]="newCatName" name="newCatName" placeholder="Category Name (e.g. Logic & Quantitative)" required style="width: 100%;">
+                <textarea [(ngModel)]="newCatTopics" name="newCatTopics" rows="2" placeholder="Topics (comma-separated)" style="width: 100%;"></textarea>
+                <button type="submit" class="btn btn-secondary btn-sm">+ Add Category</button>
+              </form>
             </div>
 
-            <!-- RESOURCES BOX -->
+            <!-- RESOURCES & MATERIAL BOX -->
             <div class="card-box" style="background: rgba(0,0,0,0.2); padding: 20px; border-radius: var(--radius-md);">
               <h4 style="font-size: 16px; margin-bottom: 12px;">Test Material & Papers</h4>
               <div style="margin-bottom: 16px;">
@@ -295,8 +304,27 @@ import { AttendanceRecord, AuditLog, Resource, SyllabusCategory } from '../../..
                       <div style="font-size: 12px; color: var(--accent-sky); text-transform: uppercase;">{{ r.resource_type }}</div>
                     </div>
                   </div>
+                } @empty {
+                  <div style="font-size: 13px; color: var(--text-muted); padding: 8px 0;">No test materials or papers uploaded yet.</div>
                 }
               </div>
+
+              @if (resUploadMsg()) {
+                <div style="margin-bottom: 12px; font-size: 13px; color: var(--accent-emerald); font-weight: 600;">{{ resUploadMsg() }}</div>
+              }
+
+              <!-- UPLOAD RESOURCE FORM -->
+              <form (submit)="$event.preventDefault(); uploadResourceFile()" style="display: flex; flex-direction: column; gap: 10px; margin-top: 16px; border-top: 1px solid var(--border-subtle); padding-top: 12px;">
+                <select [(ngModel)]="newResType" name="newResType" style="width: 100%; padding: 8px; background: var(--bg-surface); color: var(--text-primary); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);">
+                  <option value="notes">Notes (PDF)</option>
+                  <option value="practice">Practice Questions (PDF)</option>
+                  <option value="question_paper">Question Paper (PDF)</option>
+                  <option value="answer_key">Answer Key (PDF)</option>
+                </select>
+                <input type="text" [(ngModel)]="newResTitle" name="newResTitle" placeholder="Document Title (e.g. QP-2026-SY-T1)" required style="width: 100%;">
+                <input type="file" (change)="onResFileSelected($event)" accept=".pdf" required style="width: 100%;">
+                <button type="submit" class="btn btn-primary btn-sm">Upload Resource Document</button>
+              </form>
             </div>
           </div>
         </div>
@@ -503,6 +531,13 @@ export class TestWorkspaceComponent implements OnInit {
   newQ = { questionText: '', optionA: '', optionB: '', optionC: '', optionD: '', correctAnswer: 'A' };
   settingsForm = { testNumber: '', title: '', testDate: '', startTime: '', finishTime: '', totalMarks: 50, durationMinutes: 60 };
 
+  newCatName = '';
+  newCatTopics = '';
+  newResType = 'notes';
+  newResTitle = '';
+  resUploadMsg = signal('');
+  selectedResFile: File | null = null;
+
   constructor(
     private route: ActivatedRoute,
     private router: Router,
@@ -561,7 +596,62 @@ export class TestWorkspaceComponent implements OnInit {
     const resList = await this.adminService.getResultsForTest(this.testId);
     this.resultsList.set(resList);
 
+    const res = await this.adminService.getTestResources(this.testId);
+    this.testResources.set(res);
+
+    const syl = await this.adminService.getTestSyllabus(this.testId);
+    this.testSyllabus.set(syl);
+
     await this.loadAuditLogs();
+  }
+
+  onResFileSelected(event: any): void {
+    const file = event.target.files[0];
+    if (file) this.selectedResFile = file;
+  }
+
+  async uploadResourceFile(): Promise<void> {
+    if (!this.selectedResFile || !this.newResTitle.trim()) {
+      alert('Please enter a document title and select a PDF file.');
+      return;
+    }
+
+    try {
+      this.resUploadMsg.set('Uploading document...');
+      if (this.newResType === 'question_paper') {
+        await this.adminService.uploadQuestionPaper(this.testId, this.selectedResFile);
+      } else if (this.newResType === 'answer_key') {
+        await this.adminService.uploadAnswerKey(this.testId, this.selectedResFile);
+      } else {
+        await this.adminService.uploadResource(this.testId, this.newResTitle, this.newResType, this.selectedResFile);
+      }
+
+      this.resUploadMsg.set('Document uploaded successfully!');
+      this.newResTitle = '';
+      this.selectedResFile = null;
+      const res = await this.adminService.getTestResources(this.testId);
+      this.testResources.set(res);
+    } catch (err: any) {
+      this.resUploadMsg.set(`Upload failed: ${err?.message || 'Server error'}`);
+    }
+  }
+
+  async saveSyllabusCategory(): Promise<void> {
+    if (!this.newCatName.trim()) {
+      alert('Please enter a category name.');
+      return;
+    }
+
+    try {
+      await this.adminService.addSyllabusCategory(this.testId, this.newCatName, this.newCatTopics);
+      alert('Syllabus category added successfully!');
+      this.newCatName = '';
+      this.newCatTopics = '';
+      const syl = await this.adminService.getTestSyllabus(this.testId);
+      this.testSyllabus.set(syl);
+    } catch (err: any) {
+      alert(`Failed to add syllabus: ${err?.message || 'Server error'}`);
+    }
   }
 
   async loadAuditLogs(): Promise<void> {

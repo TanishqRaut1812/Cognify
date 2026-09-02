@@ -1,7 +1,7 @@
 import { Component, HostListener, OnInit, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ExamService, ActiveExamState } from '../../core/services/exam.service';
 import { AttemptSessionService } from '../../core/services/attempt-session.service';
 import { Student } from '../../core/models/cognify.models';
@@ -203,15 +203,25 @@ import { SubmissionReviewModalComponent } from './submission-review-modal.compon
 export class ExamComponent implements OnInit {
   private examService = inject(ExamService);
   private attemptSession = inject(AttemptSessionService);
+  private route = inject(ActivatedRoute);
 
   regNoInput = '';
   errorMessage = signal('');
   isLoading = signal(false);
   showReviewModal = signal(false);
   activeExamState = this.examService.activeExam;
+  targetTestId = 0;
   private lastViolationTime = 0;
 
   async ngOnInit(): Promise<void> {
+    const idParam = this.route.snapshot.queryParamMap.get('testId');
+    if (idParam) {
+      const parsed = parseInt(idParam, 10);
+      if (!isNaN(parsed) && parsed > 0) {
+        this.targetTestId = parsed;
+      }
+    }
+
     // Attempt automatic session recovery on page load / refresh
     const session = this.attemptSession.loadSession();
     if (session) {
@@ -266,7 +276,7 @@ export class ExamComponent implements OnInit {
     const res = await this.examService.verifyStudent(this.regNoInput);
     if (res.success && res.student) {
       try {
-        await this.examService.startExam(res.student);
+        await this.examService.startExam(res.student, this.targetTestId);
         this.requestBrowserFullscreen();
       } catch (e: any) {
         this.errorMessage.set(e.message || 'Failed to start exam.');
